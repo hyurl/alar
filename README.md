@@ -45,10 +45,10 @@ In other files, just define and export a `default` class, and merge the type to
 the namespace `app`, so that another file can access it directly via namespace.
 
 ```typescript
-// src/boostrap.ts
+// src/bootstrap.ts
 declare global {
     namespace app {
-        const boostrap: ModuleProxy<Boostrap>
+        const bootstrap: ModuleProxy<Bootstrap>
     }
 }
 
@@ -86,7 +86,7 @@ And other files can access to the modules via the namespace:
 import "./index";
 
 // the instance() method will link to the singleton instance of the module.
-app.boostrap.instance().init();
+app.bootstrap.instance().init();
 
 // the create() method will create a new instance.
 var user = app.service.user.create("Mr. Handsome");
