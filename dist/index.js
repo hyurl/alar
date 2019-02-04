@@ -16,24 +16,18 @@ let ModuleProxy = ModuleProxy_1 = class ModuleProxy {
         this.remoteSingletons = remoteSingletons;
         this.serviceInstances = serviceInstances;
         this.children = {};
-        this.root = path.normalize(root);
+        if (ModuleProxy_1.registry[name]) {
+            throw new Error(`Module ${name} already exists.`);
+        }
+        else if (name.indexOf(".") === -1) {
+            ModuleProxy_1.registry[name] = path.normalize(root);
+        }
     }
     get path() {
-        return path.resolve(this.root, ...this.name.split(".").slice(1));
+        return ModuleProxy_1.name2path(this.name);
     }
     get ctor() {
-        let { path } = this;
-        let mod = require.cache[path + ".ts"] || require.cache[path + ".js"];
-        if (!mod) {
-            mod = require(path);
-            if (!mod.default || typeof mod.default !== "function") {
-                throw new TypeError(`Module ${this.name} is not a constructor`);
-            }
-        }
-        else {
-            mod = mod.exports;
-        }
-        return mod.default;
+        return ModuleProxy_1.load(this.name);
     }
     instance(ins) {
         if (ins) {
@@ -82,26 +76,30 @@ let ModuleProxy = ModuleProxy_1 = class ModuleProxy {
         return this.remoteSingletons[this.name][id];
     }
     watch() {
-        if (ModuleProxy_1.watchers[this.root])
+        if (ModuleProxy_1.watchers[this.name]) {
             return;
-        let watcher = ModuleProxy_1.watchers[this.root] = chokidar_1.watch(this.root, {
-            awaitWriteFinish: true,
-            followSymlinks: false
-        });
+        }
+        else if (!ModuleProxy_1.registry[this.name]) {
+            throw new Error(`Module ${this.name} cannot watch file changes.`);
+        }
+        let root = ModuleProxy_1.registry[this.name];
         let pathToName = (filename) => {
-            return filename.slice(this.root.length + 1, -3).replace(/\\|\//g, ".");
+            return filename.slice(root.length + 1, -3).replace(/\\|\//g, ".");
         };
-        watcher.on("change", filename => {
+        let clearCache = (filename) => {
             let ext = path.extname(filename);
             if (ext === ".js" || ext === ".ts") {
                 delete this.singletons[pathToName(filename)];
                 delete require.cache[filename];
-                require(filename);
             }
-        }).on("unlink", filename => {
-            delete this.singletons[pathToName(filename)];
-            delete require.cache[filename];
-        }).on("unlinkDir", dirname => {
+        };
+        let watcher = ModuleProxy_1.watchers[this.name] = chokidar_1.watch(root, {
+            awaitWriteFinish: true,
+            followSymlinks: false
+        });
+        watcher.on("change", clearCache)
+            .on("unlink", clearCache)
+            .on("unlinkDir", dirname => {
             dirname = dirname + path.sep;
             for (let filename in require.cache) {
                 if (startsWith(filename, dirname)) {
@@ -112,7 +110,7 @@ let ModuleProxy = ModuleProxy_1 = class ModuleProxy {
         });
     }
     stopWatch() {
-        let watcher = ModuleProxy_1.watchers[this.root];
+        let watcher = ModuleProxy_1.watchers[this.name];
         if (watcher) {
             watcher.close();
         }
@@ -125,17 +123,41 @@ let ModuleProxy = ModuleProxy_1 = class ModuleProxy {
             return this.children[prop];
         }
         else if (typeof prop != "symbol") {
-            return (this.children[prop] = new ModuleProxy_1((this.name && `${this.name}.`) + String(prop), this.root, this.singletons, this.remoteSingletons, this.serviceInstances));
+            return (this.children[prop] = new ModuleProxy_1((this.name && `${this.name}.`) + String(prop), ModuleProxy_1.registry[this.name.split(".")[0]], this.singletons, this.remoteSingletons, this.serviceInstances));
         }
     }
     __has(prop) {
         return (prop in this) || (prop in this.children);
     }
 };
-ModuleProxy.watchers = {};
 ModuleProxy = ModuleProxy_1 = tslib_1.__decorate([
     js_magic_1.applyMagic
 ], ModuleProxy);
+exports.ModuleProxy = ModuleProxy;
+(function (ModuleProxy) {
+    ModuleProxy.registry = {};
+    ModuleProxy.watchers = {};
+    function name2path(name) {
+        let names = name.split("."), root = names.splice(0, 1)[0];
+        return path.resolve(ModuleProxy.registry[root], ...names);
+    }
+    ModuleProxy.name2path = name2path;
+    function load(name) {
+        let path = name2path(name);
+        let mod = require.cache[path + ".ts"] || require.cache[path + ".js"];
+        if (!mod) {
+            mod = require(path);
+            if (!mod.default || typeof mod.default !== "function") {
+                throw new TypeError(`Module ${this.name} is not a constructor.`);
+            }
+        }
+        else {
+            mod = mod.exports;
+        }
+        return mod.default;
+    }
+    ModuleProxy.load = load;
+})(ModuleProxy = exports.ModuleProxy || (exports.ModuleProxy = {}));
 exports.ModuleProxy = ModuleProxy;
 exports.default = ModuleProxy;
 //# sourceMappingURL=index.js.map

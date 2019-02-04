@@ -1,4 +1,4 @@
-# Separ
+# Separ (progressing)
 
 Separ is a light-weight framework that provides applications the ability to 
 lazy-load and hot-reload modules, and the ability to connect remote instances.

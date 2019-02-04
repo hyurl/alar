@@ -47,10 +47,7 @@ declare global {
 
 @applyMagic
 export class ModuleProxy {
-    readonly root: string;
     private children: { [name: string]: ModuleProxy } = {};
-
-    static watchers: { [dirname: string]: FSWatcher } = {};
 
     constructor(
         readonly name: string,
@@ -59,28 +56,19 @@ export class ModuleProxy {
         private remoteSingletons: { [name: string]: any } = {},
         private serviceInstances: { [id: string]: ServiceInstance } = {}
     ) {
-        this.root = path.normalize(root);
+        if (ModuleProxy.registry[name]) {
+            throw new Error(`Module ${name} already exists.`);
+        } else if (name.indexOf(".") === -1) {
+            ModuleProxy.registry[name] = path.normalize(root);
+        }
     }
 
     get path(): string {
-        return path.resolve(this.root, ...this.name.split(".").slice(1));
+        return ModuleProxy.name2path(this.name);
     }
 
     get ctor(): new (...args: any[]) => any {
-        let { path } = this;
-        let mod = require.cache[path + ".ts"] || require.cache[path + ".js"];
-
-        if (!mod) {
-            mod = require(path);
-
-            if (!mod.default || typeof mod.default !== "function") {
-                throw new TypeError(`Module ${this.name} is not a constructor`);
-            }
-        } else {
-            mod = mod.exports;
-        }
-
-        return mod.default;
+        return ModuleProxy.load(this.name);
     }
 
     instance(ins?: any) {
@@ -134,40 +122,44 @@ export class ModuleProxy {
 
     /** Watches file changes and reload the corresponding module. */
     watch() {
-        if (ModuleProxy.watchers[this.root]) return;
-
-        let watcher = ModuleProxy.watchers[this.root] = watch(this.root, {
-            awaitWriteFinish: true,
-            followSymlinks: false
-        });
-        let pathToName = (filename: string) => {
-            return filename.slice(this.root.length + 1, -3).replace(/\\|\//g, ".");
+        if (ModuleProxy.watchers[this.name]) {
+            return;
+        } else if (!ModuleProxy.registry[this.name]) {
+            throw new Error(`Module ${this.name} cannot watch file changes.`);
         }
 
-        watcher.on("change", filename => {
+        let root = ModuleProxy.registry[this.name];
+        let pathToName = (filename: string) => {
+            return filename.slice(root.length + 1, -3).replace(/\\|\//g, ".");
+        };
+        let clearCache = (filename: string) => {
             let ext = path.extname(filename);
             if (ext === ".js" || ext === ".ts") {
                 delete this.singletons[pathToName(filename)];
                 delete require.cache[filename];
-                require(filename);
             }
-        }).on("unlink", filename => {
-            delete this.singletons[pathToName(filename)];
-            delete require.cache[filename];
-        }).on("unlinkDir", dirname => {
-            dirname = dirname + path.sep;
-
-            for (let filename in require.cache) {
-                if (startsWith(filename, dirname)) {
-                    delete this.singletons[pathToName(filename)];
-                    delete require.cache[filename];
-                }
-            }
+        };
+        let watcher = ModuleProxy.watchers[this.name] = watch(root, {
+            awaitWriteFinish: true,
+            followSymlinks: false
         });
+
+        watcher.on("change", clearCache)
+            .on("unlink", clearCache)
+            .on("unlinkDir", dirname => {
+                dirname = dirname + path.sep;
+
+                for (let filename in require.cache) {
+                    if (startsWith(filename, dirname)) {
+                        delete this.singletons[pathToName(filename)];
+                        delete require.cache[filename];
+                    }
+                }
+            });
     }
 
     stopWatch() {
-        let watcher = ModuleProxy.watchers[this.root];
+        let watcher = ModuleProxy.watchers[this.name];
 
         if (watcher) {
             watcher.close();
@@ -182,7 +174,7 @@ export class ModuleProxy {
         } else if (typeof prop != "symbol") {
             return (this.children[prop] = new ModuleProxy(
                 (this.name && `${this.name}.`) + String(prop),
-                this.root,
+                ModuleProxy.registry[this.name.split(".")[0]],
                 this.singletons,
                 this.remoteSingletons,
                 this.serviceInstances
@@ -192,6 +184,35 @@ export class ModuleProxy {
 
     protected __has(prop: string) {
         return (prop in this) || (prop in this.children);
+    }
+}
+
+export namespace ModuleProxy {
+    export const registry: { [name: string]: string } = {};
+    export const watchers: { [name: string]: FSWatcher } = {};
+
+    export function name2path(name: string) {
+        let names = name.split("."),
+            root = names.splice(0, 1)[0];
+
+        return path.resolve(ModuleProxy.registry[root], ...names);
+    }
+
+    export function load(name: string) {
+        let path = name2path(name);
+        let mod = require.cache[path + ".ts"] || require.cache[path + ".js"];
+
+        if (!mod) {
+            mod = require(path);
+
+            if (!mod.default || typeof mod.default !== "function") {
+                throw new TypeError(`Module ${this.name} is not a constructor.`);
+            }
+        } else {
+            mod = mod.exports;
+        }
+
+        return mod.default;
     }
 }
 
