@@ -156,7 +156,7 @@ import "./index";
 
 The local watcher may notice the local file has changed and try to reload the 
 local module (and local singletons), however, it will not affect any remote 
-instances, that said, the instanced served remotely can still be watched and 
+instances, that said, the instance served remotely can still be watched and 
 reload on the remote server individually.
 
 In the above example, since the `remote-service` module import `index` module as
