@@ -1,18 +1,24 @@
 import * as path from "path";
 import { applyMagic } from "js-magic";
 import { watch, FSWatcher } from "chokidar";
-import { createInstance, ServiceOptions, ServiceInstance } from "asrpc";
 import hash = require("string-hash");
 import objHash = require("object-hash");
 import startsWith = require("lodash/startsWith");
+import values = require("lodash/values");
+import { RemoteService, createRemoteInstance, RemoteOptions } from './rpc';
 
 // Simple Entry Proxy And Remote.
 
 declare global {
+    interface ModuleConstructor<T> {
+        new(...args: any[]): T;
+        getInstance?(...args: any[]): T;
+    }
+
     interface ModuleProxy<T, R1 = any, R2 = any, R3 = any, R4 = any, R5 = any> {
         readonly name: string;
         readonly path: string;
-        readonly ctor: new (...args: any[]) => T;
+        readonly ctor: ModuleConstructor<T>;
 
         /** Creates a new instance of the module. */
         create(): T;
@@ -47,28 +53,39 @@ declare global {
 
 @applyMagic
 export class ModuleProxy {
+    private root: string;
     private children: { [name: string]: ModuleProxy } = {};
+    private remoteSingletons: any[] = [];
 
     constructor(
         readonly name: string,
         root: string,
         private singletons: { [name: string]: any } = {},
-        private remoteSingletons: { [name: string]: any } = {},
-        private serviceInstances: { [id: string]: ServiceInstance } = {}
+        private remoteServices: RemoteService[] = []
     ) {
-        if (ModuleProxy.registry[name]) {
-            throw new Error(`Module ${name} already exists.`);
-        } else if (name.indexOf(".") === -1) {
-            ModuleProxy.registry[name] = path.normalize(root);
-        }
+        this.root = path.normalize(root);
+        ModuleProxy.registry[name] = this;
     }
 
     get path(): string {
-        return ModuleProxy.name2path(this.name);
+        return path.resolve(this.root, ...this.name.split(".").slice(1));
     }
 
     get ctor(): new (...args: any[]) => any {
-        return ModuleProxy.load(this.name);
+        let { path } = this;
+        let mod = require.cache[path + ".ts"] || require.cache[path + ".js"];
+
+        if (!mod) {
+            mod = require(path);
+
+            if (!mod.default || typeof mod.default !== "function") {
+                throw new TypeError(`Module ${this.name} is not a constructor.`);
+            }
+        } else {
+            mod = mod.exports;
+        }
+
+        return mod.default;
     }
 
     instance(ins?: any) {
@@ -80,10 +97,11 @@ export class ModuleProxy {
             return (this.singletons[this.name] = this.ctor["getInstance"]());
         } else {
             try {
-                return new this.ctor();
+                ins = this.create();
             } catch (err) {
-                return Object.create(this.ctor.prototype);
+                ins = Object.create(this.ctor.prototype);
             }
+            return (this.singletons[this.name] = ins);
         }
     }
 
@@ -91,44 +109,38 @@ export class ModuleProxy {
         return new this.ctor(...args);
     }
 
-    async serve(server: ServiceOptions): Promise<void> {
-        let id = objHash(server),
-            ins = this.serviceInstances[id];
-
-        if (!ins) {
-            ins = this.serviceInstances[id] = createInstance(server);
-            await ins.start();
-        }
-
-        ins.register(this.ctor);
+    async serve(server: RemoteOptions): Promise<void> {
+        let service = new RemoteService(server);
+        this.remoteServices.push(service);
+        await service.serve();
     }
 
-    async connect(server: ServiceOptions): Promise<void> {
-        let id = objHash(server),
-            ins = this.serviceInstances[id];
-
-        if (!ins) {
-            ins = this.serviceInstances[id] = createInstance(server);
-        }
-
-        await ins.connect(this.ctor);
-        this.remoteSingletons[this.name].push(ins);
+    async connect(server: RemoteOptions): Promise<void> {
+        let service = new RemoteService(server);
+        this.remoteServices.push(service);
+        await service.connect();
     }
 
     remote(route: any = ""): any {
-        let id = hash(objHash(route)) % this.remoteSingletons[this.name].length;
-        return this.remoteSingletons[this.name][id];
+        let id = hash(objHash(route)) % this.remoteServices.length;
+
+        if (!this.remoteSingletons[id]) {
+            this.remoteSingletons[id] = createRemoteInstance(
+                <any>this,
+                this.remoteServices[id]
+            );
+        }
+
+        return this.remoteSingletons[id]
     }
 
     /** Watches file changes and reload the corresponding module. */
     watch() {
         if (ModuleProxy.watchers[this.name]) {
             return;
-        } else if (!ModuleProxy.registry[this.name]) {
-            throw new Error(`Module ${this.name} cannot watch file changes.`);
         }
 
-        let root = ModuleProxy.registry[this.name];
+        let { root } = this;
         let pathToName = (filename: string) => {
             return filename.slice(root.length + 1, -3).replace(/\\|\//g, ".");
         };
@@ -174,10 +186,9 @@ export class ModuleProxy {
         } else if (typeof prop != "symbol") {
             return (this.children[prop] = new ModuleProxy(
                 (this.name && `${this.name}.`) + String(prop),
-                ModuleProxy.registry[this.name.split(".")[0]],
+                this.root,
                 this.singletons,
-                this.remoteSingletons,
-                this.serviceInstances
+                this.remoteServices
             ));
         }
     }
@@ -188,32 +199,8 @@ export class ModuleProxy {
 }
 
 export namespace ModuleProxy {
-    export const registry: { [name: string]: string } = {};
+    export const registry: { [name: string]: ModuleProxy } = {};
     export const watchers: { [name: string]: FSWatcher } = {};
-
-    export function name2path(name: string) {
-        let names = name.split("."),
-            root = names.splice(0, 1)[0];
-
-        return path.resolve(ModuleProxy.registry[root], ...names);
-    }
-
-    export function load(name: string) {
-        let path = name2path(name);
-        let mod = require.cache[path + ".ts"] || require.cache[path + ".js"];
-
-        if (!mod) {
-            mod = require(path);
-
-            if (!mod.default || typeof mod.default !== "function") {
-                throw new TypeError(`Module ${this.name} is not a constructor.`);
-            }
-        } else {
-            mod = mod.exports;
-        }
-
-        return mod.default;
-    }
 }
 
 export default ModuleProxy;

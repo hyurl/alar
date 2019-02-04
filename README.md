@@ -131,7 +131,7 @@ export default class User {
 import "./index";
 
 (async () => {
-    await app.service.user.serve("/tmp/my-app/remote-service");
+    await app.serve("/tmp/my-app/remote-service");
 
     console.log("Service started!");
 })();
@@ -146,7 +146,7 @@ And in app.ts, connect to the service before using remote functions:
 import "./index";
 
 (async () => {
-    await app.service.user.connect("/tmp/my-app/remote-service");
+    await app.connect("/tmp/my-app/remote-service");
 
     console.log(await app.service.user.remote().getName()); // Mr. Handsome
 });
