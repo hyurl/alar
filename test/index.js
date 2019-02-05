@@ -1,7 +1,7 @@
 /* global app */
 
 require("source-map-support/register");
-const separ = require("..");
+const alar = require("..");
 const assert = require("assert");
 const path = require("path");
 const fs = require("fs-extra");
@@ -10,9 +10,9 @@ const awaiter = require("tslib").__awaiter;
 const Bootstrap = require("./app/bootstrap").default;
 const User = require("./app/service/user").default;
 
-describe("Separ ModuleProxy", () => {
+describe("Alar ModuleProxy", () => {
     it("should create a root module proxy instance as expected", () => {
-        var App = global["app"] = new separ.ModuleProxy("app", __dirname + "/app");
+        var App = global["app"] = new alar.ModuleProxy("app", __dirname + "/app");
 
         assert.strictEqual(App.name, "app");
         assert.strictEqual(App.path, path.normalize(__dirname + "/app"));
@@ -92,7 +92,7 @@ describe("Separ ModuleProxy", () => {
 
     it("should serve an IPC service as expected", (done) => {
         awaiter(null, null, null, function* () {
-            var sockPath = process.cwd() + "/separ.sock";
+            var sockPath = process.cwd() + "/alar.sock";
             var server = yield app.serve(sockPath);
 
             server.register(app.service.user);

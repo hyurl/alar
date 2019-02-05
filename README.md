@@ -1,6 +1,6 @@
-# Separ (progressing)
+# Alar (progressing)
 
-Separ is a light-weight framework that provides applications the ability to 
+Alar is a light-weight framework that provides applications the ability to 
 auto-load and hot-reload modules, and the ability to serve and connect remote 
 instances.
 
@@ -11,7 +11,7 @@ immediately load the corresponding module and make a reference *copy* in the
 current scope. Which means, if the module file is modified, the application
 won't be able to reload that module without restart the program.
 
-Separ, on the other hand, based on namespace and ES6 proxy, it creates a 
+Alar, on the other hand, based on namespace and ES6 proxy, it creates a 
 weak-reference of the module, and only import the module when needed, Since 
 it's weak-referenced, it will not make any copy to the module, and when the 
 module file is changed, it can wipe out the memory cache and reload the module 
@@ -19,7 +19,7 @@ without any side-effect.
 
 ### How to use?
 
-In order to use separ, one must create a root `ModuleProxy` instance, and assign
+In order to use alar, one must create a root `ModuleProxy` instance, and assign
 it to the global namespace, so other files can directly use it without import 
 and share the benefits of declaration merging (in TypeScript, if not using 
 TypeScript, just ignore any tip and code of declaration merging).
@@ -28,7 +28,7 @@ TypeScript, just ignore any tip and code of declaration merging).
 
 ```typescript
 // src/index.ts
-import { ModuleProxy } from "separ";
+import { ModuleProxy } from "alar";
 
 // Expose and merge the app as a namespace under the global namespace.
 declare global {
@@ -96,7 +96,7 @@ console.log(user.getName()); // Mr. Handsome
 
 ## Remote Service
 
-Separ allows user to easily serve the module remotely, whether in another 
+Alar allows user to easily serve the module remotely, whether in another 
 process or in another machine.
 
 ### Example

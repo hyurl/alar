@@ -9,7 +9,7 @@ import { getInstance } from './util';
 
 export { RpcOptions, RpcChannel, FSWatcher };
 
-// Simple Entry Proxy And Remote.
+// Auto-Load And Remote.
 
 declare global {
     interface ModuleConstructor<T> {

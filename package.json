@@ -1,7 +1,7 @@
 {
-  "name": "separ",
-  "version": "1.0.0",
-  "description": "Simple Entry Proxy And Remote.",
+  "name": "alar",
+  "version": "0.1.0",
+  "description": "Auto-Load And Remote.",
   "main": "dist/index.js",
   "types": "src/index.ts",
   "scripts": {
@@ -9,7 +9,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/hyurl/separ.git"
+    "url": "git+https://github.com/hyurl/alar.git"
   },
   "keywords": [
     "micro-service"
@@ -17,9 +17,9 @@
   "author": "Ayon Lee <i@hyurl.com>",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/hyurl/separ/issues"
+    "url": "https://github.com/hyurl/alar/issues"
   },
-  "homepage": "https://github.com/hyurl/separ#readme",
+  "homepage": "https://github.com/hyurl/alar#readme",
   "dependencies": {
     "@types/chokidar": "^1.7.5",
     "@types/fs-extra": "^5.0.4",

@@ -4,7 +4,7 @@
 interface ModuleProxy<T, R1 = any, R2 = any, R3 = any, R4 = any, R5 = any>
 ```
 
-Once separ is imported to the project, this interface will be presented under 
+Once alar is imported to the project, this interface will be presented under 
 the global namespace, and can be used everywhere.
 
 The interface has the following properties and methods:
@@ -48,10 +48,10 @@ class ModuleProxy
 
 This class must be imported in order to create a root module proxy, and the root
 module should be declared as a namespace under the global scope, in TypeScript,
-the following steps must be walked though for separ to work in a project.
+the following steps must be walked though for alar to work in a project.
 
 ```typescript
-import { ModuleProxy } from "separ";
+import { ModuleProxy } from "alar";
 
 // This statement creates a root module and assign it to the global scope in 
 // NodeJS env.
