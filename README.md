@@ -8,18 +8,20 @@ instances.
 
 In NodeJS (with CommonJS module solution), `require` and `import` will 
 immediately load the corresponding module and make a reference *copy* in the 
-current scope. Which means, if the module file is modified, the application
-won't be able to reload that module without restart the program.
+current scope. Which means, if the module doesn't finish initiation, e.g. 
+circular import, the application may not work  as expected, and if the module 
+file is modified, the application won't be able to reload that module without 
+restart the program.
 
 Alar, on the other hand, based on namespace and ES6 proxy, it creates a 
-weak-reference of the module, and only import the module when needed, Since 
+weak-reference of the module, and only import the module when needed. And since 
 it's weak-referenced, it will not make any copy to the module, and when the 
 module file is changed, it can wipe out the memory cache and reload the module 
 without any side-effect.
 
 ### How to use?
 
-In order to use alar, one must create a root `ModuleProxy` instance, and assign
+In order to use Alar, one must create a root `ModuleProxy` instance, and assign
 it to the global namespace, so other files can directly use it without import 
 and share the benefits of declaration merging (in TypeScript, if not using 
 TypeScript, just ignore any tip and code of declaration merging).
@@ -42,8 +44,9 @@ export const App = global["app"] = new ModuleProxy("app", __dirname);
 App.watch();
 ```
 
-In other files, just define and export a `default` class, and merge the type to
-the namespace `app`, so that another file can access it directly via namespace.
+In other files, just define and export a default class (Alar only supports the
+`default class` exported), and merge the type to the namespace `app`, so that 
+another file can access it directly via namespace.
 
 ```typescript
 // src/bootstrap.ts
