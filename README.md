@@ -6,7 +6,7 @@ instances.
 
 ## Auto-loading and Hot-reloading
 
-In NodeJS (with CommonJS module resolution), `require` and `import` will 
+In NodeJS (with CommonJS module solution), `require` and `import` will 
 immediately load the corresponding module and make a reference *copy* in the 
 current scope. Which means, if the module file is modified, the application
 won't be able to reload that module without restart the program.
