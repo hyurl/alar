@@ -9,6 +9,7 @@ const hash = require("string-hash");
 const objHash = require("object-hash");
 const startsWith = require("lodash/startsWith");
 const rpc_1 = require("./rpc");
+exports.RpcChannel = rpc_1.RpcChannel;
 let ModuleProxy = ModuleProxy_1 = class ModuleProxy {
     constructor(name, root, singletons = {}) {
         this.name = name;

@@ -6,6 +6,8 @@ import objHash = require("object-hash");
 import startsWith = require("lodash/startsWith");
 import { RpcOptions, RpcChannel, RpcServer, RpcClient } from './rpc';
 
+export { RpcOptions, RpcChannel };
+
 // Simple Entry Proxy And Remote.
 
 declare global {
