@@ -15,8 +15,8 @@ var RpcEvents;
 })(RpcEvents = exports.RpcEvents || (exports.RpcEvents = {}));
 class RpcChannel {
     constructor(options, host) {
-        this.host = "";
-        this.port = 0;
+        this.host = "0.0.0.0";
+        this.port = 9000;
         this.path = "";
         this.timeout = 5000;
         if (typeof options === "object") {
@@ -64,11 +64,11 @@ class RpcServer extends RpcChannel {
                 }
                 server.listen(util_1.absPath(this.path, true), listener);
             }
-            else if (!this.host) {
-                server.listen(this.port, listener);
+            else if (this.host) {
+                server.listen(this.port, this.host, listener);
             }
             else {
-                server.listen(this.port, this.host, listener);
+                server.listen(this.port, listener);
             }
             server.once("error", err => {
                 !resolved && reject(err);

@@ -20,8 +20,8 @@ export interface RpcOptions {
 
 /** An RPC channel that allows modules to communicate remotely. */
 export abstract class RpcChannel implements RpcOptions {
-    host = "";
-    port = 0;
+    host = "0.0.0.0";
+    port = 9000;
     path = "";
     timeout = 5000;
     protected errorHandler: (err: Error) => void;
@@ -93,10 +93,10 @@ export class RpcServer extends RpcChannel {
                 }
 
                 server.listen(absPath(this.path, true), listener);
-            } else if (!this.host) {
-                server.listen(this.port, listener);
-            } else {
+            } else if (this.host) {
                 server.listen(this.port, this.host, listener);
+            } else {
+                server.listen(this.port, listener);
             }
 
             server.once("error", err => {
