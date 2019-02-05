@@ -1,4 +1,4 @@
-import * as path from "path";
+import { resolve, normalize, extname, sep } from "path";
 import { applyMagic } from "js-magic";
 import { watch, FSWatcher } from "chokidar";
 import hash = require("string-hash");
@@ -55,17 +55,17 @@ export class ModuleProxy {
 
     constructor(
         readonly name: string,
-        root: string,
+        path: string,
         private singletons: { [name: string]: any } = {},
     ) {
         this.root = {
             name: name.split(".")[0],
-            path: path.normalize(root)
+            path: normalize(path)
         };
     }
 
     get path(): string {
-        return path.resolve(this.root.path, ...this.name.split(".").slice(1));
+        return resolve(this.root.path, ...this.name.split(".").slice(1));
     }
 
     get ctor(): ModuleConstructor<any> {
@@ -125,13 +125,13 @@ export class ModuleProxy {
 
     /** Watches file change and reload the corresponding module. */
     watch() {
-        let { name, path: root } = this.root;
+        let { name, path } = this.root;
         let pathToName = (filename: string) => {
-            let path = filename.slice(root.length + 1, -3);
-            return name + "." + path.replace(/\\|\//g, ".");
+            let modPath = filename.slice(path.length + 1, -3);
+            return name + "." + modPath.replace(/\\|\//g, ".");
         };
         let clearCache = (filename: string) => {
-            let ext = path.extname(filename);
+            let ext = extname(filename);
             let name = pathToName(filename);
 
             if ((ext === ".js" || ext === ".ts") && require.cache[filename]) {
@@ -140,14 +140,14 @@ export class ModuleProxy {
             }
         };
 
-        return watch(root, {
+        return watch(path, {
             persistent: false,
             awaitWriteFinish: true,
             followSymlinks: false
         }).on("change", clearCache)
             .on("unlink", clearCache)
             .on("unlinkDir", dirname => {
-                dirname = dirname + path.sep;
+                dirname = dirname + sep;
 
                 for (let filename in require.cache) {
                     if (startsWith(filename, dirname)) {

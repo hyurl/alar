@@ -58,7 +58,7 @@ describe("Alar ModuleProxy", () => {
         assert.strictEqual(app.service.user.instance().name, "Mr. World");
     });
 
-    it("shoul set singleton instance via instance() method as expected", () => {
+    it("should set singleton instance via instance() method as expected", () => {
         app.service.user.instance(app.service.user.create("Mr. Handsome"));
         assert.strictEqual(app.service.user.instance().name, "Mr. Handsome");
     });

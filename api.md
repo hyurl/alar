@@ -43,7 +43,7 @@ interface ModuleConstructor<T> {
 # ModuleProxy (class)
 
 ```typescript
-class ModuleProxy
+class ModuleProxy { constructor(name: string, path: string) }
 ```
 
 This class must be imported in order to create a root module proxy, and the root

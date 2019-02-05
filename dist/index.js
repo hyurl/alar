@@ -2,7 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const tslib_1 = require("tslib");
 var ModuleProxy_1;
-const path = require("path");
+const path_1 = require("path");
 const js_magic_1 = require("js-magic");
 const chokidar_1 = require("chokidar");
 exports.FSWatcher = chokidar_1.FSWatcher;
@@ -13,18 +13,18 @@ const rpc_1 = require("./rpc");
 exports.RpcChannel = rpc_1.RpcChannel;
 const util_1 = require("./util");
 let ModuleProxy = ModuleProxy_1 = class ModuleProxy {
-    constructor(name, root, singletons = {}) {
+    constructor(name, path, singletons = {}) {
         this.name = name;
         this.singletons = singletons;
         this.remoteSingletons = {};
         this.children = {};
         this.root = {
             name: name.split(".")[0],
-            path: path.normalize(root)
+            path: path_1.normalize(path)
         };
     }
     get path() {
-        return path.resolve(this.root.path, ...this.name.split(".").slice(1));
+        return path_1.resolve(this.root.path, ...this.name.split(".").slice(1));
     }
     get ctor() {
         let { path } = this;
@@ -66,27 +66,27 @@ let ModuleProxy = ModuleProxy_1 = class ModuleProxy {
         return new rpc_1.RpcClient(config).open();
     }
     watch() {
-        let { name, path: root } = this.root;
+        let { name, path } = this.root;
         let pathToName = (filename) => {
-            let path = filename.slice(root.length + 1, -3);
-            return name + "." + path.replace(/\\|\//g, ".");
+            let modPath = filename.slice(path.length + 1, -3);
+            return name + "." + modPath.replace(/\\|\//g, ".");
         };
         let clearCache = (filename) => {
-            let ext = path.extname(filename);
+            let ext = path_1.extname(filename);
             let name = pathToName(filename);
             if ((ext === ".js" || ext === ".ts") && require.cache[filename]) {
                 delete this.singletons[name];
                 delete require.cache[filename];
             }
         };
-        return chokidar_1.watch(root, {
+        return chokidar_1.watch(path, {
             persistent: false,
             awaitWriteFinish: true,
             followSymlinks: false
         }).on("change", clearCache)
             .on("unlink", clearCache)
             .on("unlinkDir", dirname => {
-            dirname = dirname + path.sep;
+            dirname = dirname + path_1.sep;
             for (let filename in require.cache) {
                 if (startsWith(filename, dirname)) {
                     delete this.singletons[pathToName(filename)];

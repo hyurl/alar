@@ -65,7 +65,7 @@ export default class Bootstrap {
 
 ```typescript
 // src/service/user.ts
-// The namespace must relate to the filename.
+// The namespace must correspond to the filename.
 declare global {
     namespace app {
         namespace service {
@@ -137,7 +137,7 @@ export default class User {
 import { App } from "./index";
 
 (async () => {
-    let service = await App.serve("/tmp/my-app/remote-service");
+    let service = await App.serve("/tmp/my-app/remote-service.sock");
 
     service.register(app.service.user);
 
@@ -155,7 +155,7 @@ And in app.ts, connect to the service before using remote functions:
 import { App } from "./index";
 
 (async () => {
-    let service = await App.connect("/tmp/my-app/remote-service");
+    let service = await App.connect("/tmp/my-app/remote-service.sock");
 
     service.register(app.service.user);
 
