@@ -168,4 +168,4 @@ reload on the remote server individually.
 In the above example, since the `remote-service` module import `index` module as
 well, which starts the watcher, when the `user` module is changed, the 
 `remote-service` will reload the module as expected, and the `app` calls it 
-remotely will get the expected result as well.
+remotely will get the new result as expected.
