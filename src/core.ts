@@ -1,9 +1,10 @@
-import { ModuleProxy } from ".";
+import "source-map-support/register";
+import { ModuleProxy } from "./index";
 
 declare global {
     namespace app { }
 }
 
-const app = global["app"] = new ModuleProxy("app", __dirname);
+export const App = global["app"] = new ModuleProxy("app", __dirname);
 
-app.watch();
+App.watch();

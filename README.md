@@ -35,10 +35,10 @@ declare global {
 }
 
 // create the instance
-const app = global["app"] = new ModuleProxy("app", __dirname);
+expot const App = global["app"] = new ModuleProxy("app", __dirname);
 
 // watch file changes and hot-reload modules
-app.watch();
+App.watch();
 ```
 
 In other files, just define and export a `default` class, and merge the type to
@@ -114,24 +114,28 @@ declare global {
 }
 
 export default class User {
-    /** A unqiue ID just for the applcation to find the remote service */
-    static id = "app.serivce.user";
-
-    constructor(private name: string) { }
+    constructor(private name?: string) {}
 
     // any method that will potentially be called remotely should be async.
     async getName() {
         return this.name;
+    }
+
+    // static method getInstance is used to create the singleton instance.
+    static getInstance() {
+        return new this("Mr. Handsome");
     }
 }
 ```
 
 ```typescript
 // src/remote-service.ts
-import "./index";
+import { App } from "./index";
 
 (async () => {
-    await app.serve("/tmp/my-app/remote-service");
+    let service = await App.serve("/tmp/my-app/remote-service");
+
+    service.register(app.service.user);
 
     console.log("Service started!");
 })();
@@ -143,10 +147,12 @@ And in app.ts, connect to the service before using remote functions:
 
 ```typescript
 // app.ts
-import "./index";
+import { App } from "./index";
 
 (async () => {
-    await app.connect("/tmp/my-app/remote-service");
+    let service = await App.connect("/tmp/my-app/remote-service");
+
+    service.register(app.service.user);
 
     console.log(await app.service.user.remote().getName()); // Mr. Handsome
 });

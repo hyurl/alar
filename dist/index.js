@@ -5,29 +5,34 @@ var ModuleProxy_1;
 const path = require("path");
 const js_magic_1 = require("js-magic");
 const chokidar_1 = require("chokidar");
-const asrpc_1 = require("asrpc");
 const hash = require("string-hash");
 const objHash = require("object-hash");
 const startsWith = require("lodash/startsWith");
+const rpc_1 = require("./rpc");
 let ModuleProxy = ModuleProxy_1 = class ModuleProxy {
-    constructor(name, root, singletons = {}, remoteSingletons = {}, serviceInstances = {}) {
+    constructor(name, root, singletons = {}) {
         this.name = name;
         this.singletons = singletons;
-        this.remoteSingletons = remoteSingletons;
-        this.serviceInstances = serviceInstances;
+        this.remoteSingletons = [];
         this.children = {};
-        if (ModuleProxy_1.registry[name]) {
-            throw new Error(`Module ${name} already exists.`);
-        }
-        else if (name.indexOf(".") === -1) {
-            ModuleProxy_1.registry[name] = path.normalize(root);
-        }
+        this.root = path.normalize(root);
     }
     get path() {
-        return ModuleProxy_1.name2path(this.name);
+        return path.resolve(this.root, ...this.name.split(".").slice(1));
     }
     get ctor() {
-        return ModuleProxy_1.load(this.name);
+        let { path } = this;
+        let mod = require.cache[path + ".ts"] || require.cache[path + ".js"];
+        if (!mod) {
+            mod = require(path);
+            if (!mod.default || typeof mod.default !== "function") {
+                throw new TypeError(`Module ${this.name} is not a constructor.`);
+            }
+        }
+        else {
+            mod = mod.exports;
+        }
+        return mod.default;
     }
     instance(ins) {
         if (ins) {
@@ -41,48 +46,29 @@ let ModuleProxy = ModuleProxy_1 = class ModuleProxy {
         }
         else {
             try {
-                return new this.ctor();
+                ins = this.create();
             }
             catch (err) {
-                return Object.create(this.ctor.prototype);
+                ins = Object.create(this.ctor.prototype);
             }
+            return (this.singletons[this.name] = ins);
         }
     }
     create(...args) {
         return new this.ctor(...args);
     }
     serve(server) {
-        return tslib_1.__awaiter(this, void 0, void 0, function* () {
-            let id = objHash(server), ins = this.serviceInstances[id];
-            if (!ins) {
-                ins = this.serviceInstances[id] = asrpc_1.createInstance(server);
-                yield ins.start();
-            }
-            ins.register(this.ctor);
-        });
+        return new rpc_1.RpcServer(server).open();
     }
     connect(server) {
-        return tslib_1.__awaiter(this, void 0, void 0, function* () {
-            let id = objHash(server), ins = this.serviceInstances[id];
-            if (!ins) {
-                ins = this.serviceInstances[id] = asrpc_1.createInstance(server);
-            }
-            yield ins.connect(this.ctor);
-            this.remoteSingletons[this.name].push(ins);
-        });
+        return new rpc_1.RpcClient(server).open();
     }
     remote(route = "") {
-        let id = hash(objHash(route)) % this.remoteSingletons[this.name].length;
-        return this.remoteSingletons[this.name][id];
+        let id = hash(objHash(route)) % this.remoteSingletons.length;
+        return this.remoteSingletons[id];
     }
     watch() {
-        if (ModuleProxy_1.watchers[this.name]) {
-            return;
-        }
-        else if (!ModuleProxy_1.registry[this.name]) {
-            throw new Error(`Module ${this.name} cannot watch file changes.`);
-        }
-        let root = ModuleProxy_1.registry[this.name];
+        let { root } = this;
         let pathToName = (filename) => {
             return filename.slice(root.length + 1, -3).replace(/\\|\//g, ".");
         };
@@ -93,11 +79,10 @@ let ModuleProxy = ModuleProxy_1 = class ModuleProxy {
                 delete require.cache[filename];
             }
         };
-        let watcher = ModuleProxy_1.watchers[this.name] = chokidar_1.watch(root, {
+        return chokidar_1.watch(root, {
             awaitWriteFinish: true,
             followSymlinks: false
-        });
-        watcher.on("change", clearCache)
+        }).on("change", clearCache)
             .on("unlink", clearCache)
             .on("unlinkDir", dirname => {
             dirname = dirname + path.sep;
@@ -109,12 +94,6 @@ let ModuleProxy = ModuleProxy_1 = class ModuleProxy {
             }
         });
     }
-    stopWatch() {
-        let watcher = ModuleProxy_1.watchers[this.name];
-        if (watcher) {
-            watcher.close();
-        }
-    }
     __get(prop) {
         if (prop in this) {
             return this[prop];
@@ -123,7 +102,7 @@ let ModuleProxy = ModuleProxy_1 = class ModuleProxy {
             return this.children[prop];
         }
         else if (typeof prop != "symbol") {
-            return (this.children[prop] = new ModuleProxy_1((this.name && `${this.name}.`) + String(prop), ModuleProxy_1.registry[this.name.split(".")[0]], this.singletons, this.remoteSingletons, this.serviceInstances));
+            return (this.children[prop] = new ModuleProxy_1((this.name && `${this.name}.`) + String(prop), this.root, this.singletons));
         }
     }
     __has(prop) {
@@ -133,31 +112,6 @@ let ModuleProxy = ModuleProxy_1 = class ModuleProxy {
 ModuleProxy = ModuleProxy_1 = tslib_1.__decorate([
     js_magic_1.applyMagic
 ], ModuleProxy);
-exports.ModuleProxy = ModuleProxy;
-(function (ModuleProxy) {
-    ModuleProxy.registry = {};
-    ModuleProxy.watchers = {};
-    function name2path(name) {
-        let names = name.split("."), root = names.splice(0, 1)[0];
-        return path.resolve(ModuleProxy.registry[root], ...names);
-    }
-    ModuleProxy.name2path = name2path;
-    function load(name) {
-        let path = name2path(name);
-        let mod = require.cache[path + ".ts"] || require.cache[path + ".js"];
-        if (!mod) {
-            mod = require(path);
-            if (!mod.default || typeof mod.default !== "function") {
-                throw new TypeError(`Module ${this.name} is not a constructor.`);
-            }
-        }
-        else {
-            mod = mod.exports;
-        }
-        return mod.default;
-    }
-    ModuleProxy.load = load;
-})(ModuleProxy = exports.ModuleProxy || (exports.ModuleProxy = {}));
 exports.ModuleProxy = ModuleProxy;
 exports.default = ModuleProxy;
 //# sourceMappingURL=index.js.map

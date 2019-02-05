@@ -1,84 +1,62 @@
-import * as net from "net";
-import * as path from "path";
-import * as fs from "fs-extra";
-import { send, receive } from "bsp";
-import isSocketResetError = require("is-socket-reset-error");
-import { set, obj2err, err2obj, absPath } from './util';
-
-export enum RpcEvents {
-    REQUEST,
-    RESPONSE,
-    ERROR,
-}
-
-export interface RpcOptions {
-    host?: string;
-    port?: number;
-    path?: string;
-    timeout?: number;
-}
-
-export abstract class RpcChannel implements RpcOptions {
-    host = "";
-    port = 0;
-    path = "";
-    timeout = 5000;
-    protected errorHandler: (err: Error) => void;
-
-    constructor(path: string);
-    constructor(port: number, host?: string);
-    constructor(options: RpcOptions);
-    constructor(options: string | number | RpcOptions, host?: string) {
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const tslib_1 = require("tslib");
+const net = require("net");
+const path = require("path");
+const fs = require("fs-extra");
+const bsp_1 = require("bsp");
+const isSocketResetError = require("is-socket-reset-error");
+const util_1 = require("./util");
+var RpcEvents;
+(function (RpcEvents) {
+    RpcEvents[RpcEvents["REQUEST"] = 0] = "REQUEST";
+    RpcEvents[RpcEvents["RESPONSE"] = 1] = "RESPONSE";
+    RpcEvents[RpcEvents["ERROR"] = 2] = "ERROR";
+})(RpcEvents = exports.RpcEvents || (exports.RpcEvents = {}));
+class RpcChannel {
+    constructor(options, host) {
+        this.host = "";
+        this.port = 0;
+        this.path = "";
+        this.timeout = 5000;
         if (typeof options === "object") {
             Object.assign(this, options);
-        } else if (typeof options === "number") {
+        }
+        else if (typeof options === "number") {
             Object.assign(this, { host, port: options });
-        } else {
-            this.path = absPath(options);
+        }
+        else {
+            this.path = util_1.absPath(options);
         }
     }
-
-    /**
-     * Binds an error handler to be invoked whenever an error occurred in 
-     * asynchronous operations which can't be caught during run-time.
-     */
-    onError(handler: (err: Error) => void) {
+    onError(handler) {
         this.errorHandler = handler;
     }
-
-    abstract open(): Promise<this>;
-
-    abstract close(): Promise<this>;
-
-    abstract register<T extends object>(mod: ModuleProxy<T>): this;
 }
-
-export class RpcServer extends RpcChannel {
-    private server: net.Server;
-    private registry: { [name: string]: ModuleProxy<any> } = {};
-
-    open(): Promise<this> {
-        return new Promise(async (resolve, reject) => {
-            let server: net.Server = this.server = net.createServer(),
-                resolved = false,
-                listener = () => {
-                    (resolved = true) && resolve(this);
-                };
-
+exports.RpcChannel = RpcChannel;
+class RpcServer extends RpcChannel {
+    constructor() {
+        super(...arguments);
+        this.registry = {};
+    }
+    open() {
+        return new Promise((resolve, reject) => tslib_1.__awaiter(this, void 0, void 0, function* () {
+            let server = this.server = net.createServer(), resolved = false, listener = () => {
+                (resolved = true) && resolve(this);
+            };
             if (this.path) {
-                await fs.ensureDir(path.dirname(this.path));
-
-                if (await fs.pathExists(this.path)) {
-                    await fs.unlink(this.path);
+                yield fs.ensureDir(path.dirname(this.path));
+                if (yield fs.pathExists(this.path)) {
+                    yield fs.unlink(this.path);
                 }
-
-                server.listen(absPath(this.path, true), listener);
-            } else if (!this.host) {
+                server.listen(util_1.absPath(this.path, true), listener);
+            }
+            else if (!this.host) {
                 server.listen(this.port, listener);
-            } else {
+            }
+            else {
                 server.listen(this.port, this.host, listener);
             }
-
             server.once("error", err => {
                 !resolved && reject(err);
             }).on("error", err => {
@@ -86,37 +64,33 @@ export class RpcServer extends RpcChannel {
                     this.errorHandler.call(this, err);
                 }
             }).on("connection", socket => {
-                let remains: Buffer[] = [];
-
+                let remains = [];
                 socket.on("error", err => {
                     if (!isSocketResetError(err) && this.errorHandler) {
                         this.errorHandler.call(this, err);
                     }
-                }).on("data", async (buf) => {
-                    let msg = receive<[number, number, string, string, ...any[]]>(buf, remains);
-
+                }).on("data", (buf) => tslib_1.__awaiter(this, void 0, void 0, function* () {
+                    let msg = bsp_1.receive(buf, remains);
                     for (let [event, taskId, name, method, ...args] of msg) {
                         if (event === RpcEvents.REQUEST) {
                             let event = RpcEvents.RESPONSE, data;
-
                             try {
                                 let ins = this.registry[name].instance();
                                 event = RpcEvents.RESPONSE;
-                                data = await ins[method](...args);
-                            } catch (err) {
-                                event = RpcEvents.ERROR;
-                                data = err2obj(err);
+                                data = yield ins[method](...args);
                             }
-
-                            socket.write(send(event, taskId, data));
+                            catch (err) {
+                                event = RpcEvents.ERROR;
+                                data = util_1.err2obj(err);
+                            }
+                            socket.write(bsp_1.send(event, taskId, data));
                         }
                     }
-                });
+                }));
             });
-        });
+        }));
     }
-
-    close(): Promise<this> {
+    close() {
         return new Promise(resolve => {
             this.server ? this.server.close(() => {
                 this.server.unref();
@@ -124,30 +98,24 @@ export class RpcServer extends RpcChannel {
             }) : resolve(this);
         });
     }
-
-    register<T>(mod: ModuleProxy<T>): this {
+    register(mod) {
         this.registry[mod.name] = mod;
         return this;
     }
 }
-
-export class RpcClient extends RpcChannel {
-    private socket: net.Socket;
-    private queue: any[][] = [];
-    private taskId: number = 0;
-    private tasks: {
-        [taskId: number]: {
-            resolve: (res) => void,
-            reject: (err) => void
-        };
-    } = {};
-
-    open(): Promise<this> {
+exports.RpcServer = RpcServer;
+class RpcClient extends RpcChannel {
+    constructor() {
+        super(...arguments);
+        this.queue = [];
+        this.taskId = 0;
+        this.tasks = {};
+    }
+    open() {
         return new Promise((resolve, reject) => {
             let resolved = false;
             let listener = () => {
                 !resolved && resolve(this);
-
                 while (this.queue.length) {
                     let data = this.queue.shift();
                     this.send(...data);
@@ -155,121 +123,107 @@ export class RpcClient extends RpcChannel {
             };
             let connect = () => {
                 if (this.path) {
-                    this.socket = net.createConnection(absPath(this.path, true), listener);
-                } else {
+                    this.socket = net.createConnection(util_1.absPath(this.path, true), listener);
+                }
+                else {
                     this.socket = net.createConnection(this.port, this.host, listener);
                 }
             };
-            let remains: any[] = [];
-
+            let remains = [];
             connect();
-
             this.socket.once("error", err => {
                 !resolved && reject(err);
             }).on("error", err => {
                 if (isSocketResetError(err)) {
                     this.socket.unref();
-
                     let times = 0;
                     let maxTimes = Math.round(this.timeout / 50);
                     let reconnect = () => {
                         let timer = setTimeout(() => {
                             connect();
                             times++;
-
                             if (!this.socket.destroyed
                                 || this.socket.connecting) {
                                 clearTimeout(timer);
-                            } else if (times === maxTimes) {
+                            }
+                            else if (times === maxTimes) {
                                 clearTimeout(timer);
                                 this.errorHandler.call(this, err);
-                            } else {
+                            }
+                            else {
                                 reconnect();
                             }
                         }, 50);
                     };
-                } else if (this.errorHandler && resolved) {
+                }
+                else if (this.errorHandler && resolved) {
                     this.errorHandler.call(this, err);
                 }
             }).on("data", buf => {
-                let msg = receive<[number, number, any]>(buf, remains);
-
+                let msg = bsp_1.receive(buf, remains);
                 for (let [event, taskId, data] of msg) {
                     if (this.tasks[taskId]) {
                         if (event === RpcEvents.RESPONSE) {
                             this.tasks[taskId].resolve(data);
-                        } else if (event === RpcEvents.ERROR) {
-                            this.tasks[taskId].reject(obj2err(data));
+                        }
+                        else if (event === RpcEvents.ERROR) {
+                            this.tasks[taskId].reject(util_1.obj2err(data));
                         }
                     }
                 }
             });
         });
     }
-
-    close(): Promise<this> {
+    close() {
         return new Promise(resolve => {
             if (this.socket) {
                 this.socket.destroy();
                 this.socket.unref();
                 resolve(this);
-            } else {
+            }
+            else {
                 resolve(this);
             }
         });
     }
-
-    /** Binds a module proxy to the remote service. */
-    register<T extends object>(mod: ModuleProxy<T>): this {
+    register(mod) {
         let ins = new Proxy(mod.create(), {
-            get: (ins, prop: string) => {
+            get: (ins, prop) => {
                 if (typeof ins[prop] === "function" && !ins[prop].proxified) {
-                    set(ins, prop, this.createFunction(ins, mod.name, prop));
+                    util_1.set(ins, prop, this.createFunction(ins, mod.name, prop));
                 }
-
                 return ins[prop];
             }
         });
-
-        (<T[]>mod["remoteSingletons"]).push(ins);
+        mod["remoteSingletons"].push(ins);
         return this;
     }
-
-    private send(...data: any[]) {
+    send(...data) {
         if (this.socket && !this.socket.destroyed) {
-            this.socket.write(send(...data));
-        } else {
+            this.socket.write(bsp_1.send(...data));
+        }
+        else {
             this.queue.push(data);
         }
     }
-
-    private getTaskId() {
+    getTaskId() {
         let taskId = this.taskId++;
-
         if (this.taskId === Number.MAX_SAFE_INTEGER)
             this.taskId = 0;
-
         return taskId;
     }
-
-    private createFunction<T>(ins: T, name: string, method: string) {
+    createFunction(ins, name, method) {
         let $this = this;
         let originMethod = ins[method];
-        let fn = function (...args: any[]): Promise<any> {
+        let fn = function (...args) {
             return new Promise((resolve, reject) => {
                 let taskId = $this.getTaskId();
                 let { timeout } = $this;
                 let timer = setTimeout(() => {
-                    let num = Math.round(timeout / 1000),
-                        unit = num === 1 ? "second" : "seconds";
-
+                    let num = Math.round(timeout / 1000), unit = num === 1 ? "second" : "seconds";
                     delete $this.tasks[taskId];
-                    reject(new Error(
-                        `RPC request timeout after ${num} ${unit}`
-                    ));
+                    reject(new Error(`RPC request timeout after ${num} ${unit}`));
                 }, timeout);
-
-
                 $this.tasks[taskId] = {
                     resolve: (res) => {
                         resolve(res);
@@ -282,18 +236,17 @@ export class RpcClient extends RpcChannel {
                         delete $this.tasks[taskId];
                     }
                 };
-
                 $this.send(RpcEvents.REQUEST, taskId, name, method, ...args);
             });
         };
-
-        set(fn, "proxified", true);
-        set(fn, "name", method);
-        set(fn, "length", originMethod.length);
-        set(fn, "toString", function toString() {
+        util_1.set(fn, "proxified", true);
+        util_1.set(fn, "name", method);
+        util_1.set(fn, "length", originMethod.length);
+        util_1.set(fn, "toString", function toString() {
             return Function.prototype.toString.call(originMethod);
         }, true);
-
         return fn;
     }
 }
+exports.RpcClient = RpcClient;
+//# sourceMappingURL=rpc.js.map

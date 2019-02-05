@@ -1,11 +1,10 @@
 import * as path from "path";
 import { applyMagic } from "js-magic";
-import { watch, FSWatcher } from "chokidar";
+import { watch } from "chokidar";
 import hash = require("string-hash");
 import objHash = require("object-hash");
 import startsWith = require("lodash/startsWith");
-import values = require("lodash/values");
-import { RemoteService, createRemoteInstance, RemoteOptions } from './rpc';
+import { RpcOptions, RpcChannel, RpcServer, RpcClient } from './rpc';
 
 // Simple Entry Proxy And Remote.
 
@@ -33,38 +32,26 @@ declare global {
         instance(ins?: T): T;
 
         /**
-         * Uses a remote instance of the module.
-         * Must call `connect()` to establish connection of the remote instance
-         * before using this method.
-         * 
          * The `route` can be any value, the module proxy will automatically
          * calculate it and direct the traffic to one of the remote instances 
          * connected according to the route.
          */
         remote(route?: any): T;
-
-        /** Starts a remote instance of the module. */
-        serve(server: ServiceOptions): Promise<void>;
-
-        /** Connects to a remote instance of the module. */
-        connect(server: ServiceOptions): Promise<void>;
     }
 }
 
 @applyMagic
 export class ModuleProxy {
     private root: string;
-    private children: { [name: string]: ModuleProxy } = {};
     private remoteSingletons: any[] = [];
+    private children: { [name: string]: ModuleProxy } = {};
 
     constructor(
         readonly name: string,
         root: string,
         private singletons: { [name: string]: any } = {},
-        private remoteServices: RemoteService[] = []
     ) {
         this.root = path.normalize(root);
-        ModuleProxy.registry[name] = this;
     }
 
     get path(): string {
@@ -109,37 +96,21 @@ export class ModuleProxy {
         return new this.ctor(...args);
     }
 
-    async serve(server: RemoteOptions): Promise<void> {
-        let service = new RemoteService(server);
-        this.remoteServices.push(service);
-        await service.serve();
+    serve(server: string | RpcOptions): Promise<RpcChannel> {
+        return new RpcServer(<any>server).open();
     }
 
-    async connect(server: RemoteOptions): Promise<void> {
-        let service = new RemoteService(server);
-        this.remoteServices.push(service);
-        await service.connect();
+    connect(server: string | RpcOptions): Promise<RpcChannel> {
+        return new RpcClient(<any>server).open();
     }
 
     remote(route: any = ""): any {
-        let id = hash(objHash(route)) % this.remoteServices.length;
-
-        if (!this.remoteSingletons[id]) {
-            this.remoteSingletons[id] = createRemoteInstance(
-                <any>this,
-                this.remoteServices[id]
-            );
-        }
-
-        return this.remoteSingletons[id]
+        let id = hash(objHash(route)) % this.remoteSingletons.length;
+        return this.remoteSingletons[id];
     }
 
     /** Watches file changes and reload the corresponding module. */
     watch() {
-        if (ModuleProxy.watchers[this.name]) {
-            return;
-        }
-
         let { root } = this;
         let pathToName = (filename: string) => {
             return filename.slice(root.length + 1, -3).replace(/\\|\//g, ".");
@@ -151,12 +122,11 @@ export class ModuleProxy {
                 delete require.cache[filename];
             }
         };
-        let watcher = ModuleProxy.watchers[this.name] = watch(root, {
+
+        return watch(root, {
             awaitWriteFinish: true,
             followSymlinks: false
-        });
-
-        watcher.on("change", clearCache)
+        }).on("change", clearCache)
             .on("unlink", clearCache)
             .on("unlinkDir", dirname => {
                 dirname = dirname + path.sep;
@@ -170,14 +140,6 @@ export class ModuleProxy {
             });
     }
 
-    stopWatch() {
-        let watcher = ModuleProxy.watchers[this.name];
-
-        if (watcher) {
-            watcher.close();
-        }
-    }
-
     protected __get(prop: string) {
         if (prop in this) {
             return this[prop];
@@ -188,7 +150,6 @@ export class ModuleProxy {
                 (this.name && `${this.name}.`) + String(prop),
                 this.root,
                 this.singletons,
-                this.remoteServices
             ));
         }
     }
@@ -196,11 +157,6 @@ export class ModuleProxy {
     protected __has(prop: string) {
         return (prop in this) || (prop in this.children);
     }
-}
-
-export namespace ModuleProxy {
-    export const registry: { [name: string]: ModuleProxy } = {};
-    export const watchers: { [name: string]: FSWatcher } = {};
 }
 
 export default ModuleProxy;

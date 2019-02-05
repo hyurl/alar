@@ -34,6 +34,7 @@
   },
   "devDependencies": {
     "@types/node": "^10.12.18",
-    "sleep-promise": "^8.0.1"
+    "sleep-promise": "^8.0.1",
+    "source-map-support": "^0.5.10"
   }
 }
