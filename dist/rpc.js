@@ -29,6 +29,19 @@ class RpcChannel {
             this.path = util_1.absPath(options);
         }
     }
+    get dsn() {
+        let dsn = this.path ? "ipc:" : "rpc:";
+        if (this.path) {
+            dsn += this.path;
+        }
+        else if (this.port) {
+            if (this.host) {
+                dsn += this.host + ":";
+            }
+            dsn += this.port;
+        }
+        return dsn + "?timeout=" + this.timeout;
+    }
     onError(handler) {
         this.errorHandler = handler;
     }
@@ -109,6 +122,7 @@ class RpcClient extends RpcChannel {
         super(...arguments);
         this.queue = [];
         this.taskId = 0;
+        this.registry = {};
         this.tasks = {};
     }
     open() {
@@ -179,6 +193,10 @@ class RpcClient extends RpcChannel {
             if (this.socket) {
                 this.socket.destroy();
                 this.socket.unref();
+                let { dsn } = this;
+                for (let name in this.registry) {
+                    delete this.registry[name]["remoteSingletons"][dsn];
+                }
                 resolve(this);
             }
             else {
@@ -187,7 +205,8 @@ class RpcClient extends RpcChannel {
         });
     }
     register(mod) {
-        let ins = new Proxy(mod.create(), {
+        this.registry[mod.name] = mod;
+        mod["remoteSingletons"][this.dsn] = new Proxy(util_1.getInstance(mod), {
             get: (ins, prop) => {
                 if (typeof ins[prop] === "function" && !ins[prop].proxified) {
                     util_1.set(ins, prop, this.createFunction(ins, mod.name, prop));
@@ -195,7 +214,6 @@ class RpcClient extends RpcChannel {
                 return ins[prop];
             }
         });
-        mod["remoteSingletons"].push(ins);
         return this;
     }
     send(...data) {

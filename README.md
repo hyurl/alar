@@ -1,9 +1,10 @@
 # Separ (progressing)
 
 Separ is a light-weight framework that provides applications the ability to 
-lazy-load and hot-reload modules, and the ability to connect remote instances.
+auto-load and hot-reload modules, and the ability to serve and connect remote 
+instances.
 
-## Lazy-load and Hot-reload
+## Auto-loading and Hot-reloading
 
 In NodeJS (with CommonJS module resolution), `require` and `import` will 
 immediately load the corresponding module and make a reference *copy* in the 
@@ -18,7 +19,7 @@ without any side-effect.
 
 ### How to use?
 
-In order to use Separ, one must create a root `ModuleProxy` instance, and assign
+In order to use separ, one must create a root `ModuleProxy` instance, and assign
 it to the global namespace, so other files can directly use it without import 
 and share the benefits of declaration merging (in TypeScript, if not using 
 TypeScript, just ignore any tip and code of declaration merging).
@@ -29,15 +30,15 @@ TypeScript, just ignore any tip and code of declaration merging).
 // src/index.ts
 import { ModuleProxy } from "separ";
 
-// expose and merge the app as a namespace under the global namespace
+// Expose and merge the app as a namespace under the global namespace.
 declare global {
     namespace app { }
 }
 
-// create the instance
-expot const App = global["app"] = new ModuleProxy("app", __dirname);
+// Create the instance.
+export const App = global["app"] = new ModuleProxy("app", __dirname);
 
-// watch file changes and hot-reload modules
+// Watch file changes and hot-reload modules.
 App.watch();
 ```
 
@@ -61,7 +62,7 @@ export default class Bootstrap {
 
 ```typescript
 // src/service/user.ts
-// the namespace must corresponds to the filename.
+// The namespace must relate to the filename.
 declare global {
     namespace app {
         namespace service {
@@ -85,15 +86,15 @@ And other files can access to the modules via the namespace:
 // src/app.ts
 import "./index";
 
-// the instance() method will link to the singleton instance of the module.
+// The instance() method will link to the singleton instance of the module.
 app.bootstrap.instance().init();
 
-// the create() method will create a new instance.
+// The create() method will create a new instance.
 var user = app.service.user.create("Mr. Handsome");
 console.log(user.getName()); // Mr. Handsome
 ```
 
-## Remote Instance
+## Remote Service
 
 Separ allows user to easily serve the module remotely, whether in another 
 process or in another machine.
@@ -116,12 +117,12 @@ declare global {
 export default class User {
     constructor(private name?: string) {}
 
-    // any method that will potentially be called remotely should be async.
+    // Any method that will potentially be called remotely should be async.
     async getName() {
         return this.name;
     }
 
-    // static method getInstance is used to create the singleton instance.
+    // Static method getInstance() is used to create the singleton instance.
     static getInstance() {
         return new this("Mr. Handsome");
     }
@@ -141,7 +142,8 @@ import { App } from "./index";
 })();
 ```
 
-Just try `ts-node remote-service`, and the service will be started immediately.
+Just try `ts-node src/remote-service` (or `node dist/remote-service`), and the
+service will be started immediately.
 
 And in app.ts, connect to the service before using remote functions:
 
@@ -158,14 +160,16 @@ import { App } from "./index";
 })();
 ```
 
-### Hot-reload in Remote Service
+### Hot-reloading in Remote Service
 
 The local watcher may notice the local file has changed and try to reload the 
-local module (and local singletons), however, it will not affect any remote 
+local module (and the local singleton), however, it will not affect any remote 
 instances, that said, the instance served remotely can still be watched and 
-reload on the remote server individually.
+reloaded on the remote server individually.
 
 In the above example, since the `remote-service` module import `index` module as
 well, which starts the watcher, when the `user` module is changed, the 
 `remote-service` will reload the module as expected, and the `app` calls it 
 remotely will get the new result as expected.
+
+For more details, please check the [API documentation](./api.md).

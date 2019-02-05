@@ -3,7 +3,7 @@ import * as path from "path";
 import * as fs from "fs-extra";
 import { send, receive } from "bsp";
 import isSocketResetError = require("is-socket-reset-error");
-import { set, obj2err, err2obj, absPath } from './util';
+import { set, obj2err, err2obj, absPath, getInstance } from './util';
 
 export enum RpcEvents {
     REQUEST,
@@ -37,6 +37,22 @@ export abstract class RpcChannel implements RpcOptions {
         } else {
             this.path = absPath(options);
         }
+    }
+
+    /** Gets the data source name according to the configuration. */
+    get dsn() {
+        let dsn = this.path ? "ipc:" : "rpc:";
+
+        if (this.path) {
+            dsn += this.path;
+        } else if (this.port) {
+            if (this.host) {
+                dsn += this.host + ":";
+            }
+            dsn += this.port;
+        }
+
+        return dsn + "?timeout=" + this.timeout;
     }
 
     /**
@@ -139,6 +155,7 @@ export class RpcClient extends RpcChannel {
     private socket: net.Socket;
     private queue: any[][] = [];
     private taskId: number = 0;
+    private registry: { [name: string]: ModuleProxy<any> } = {};
     private tasks: {
         [taskId: number]: {
             resolve: (res) => void,
@@ -216,6 +233,12 @@ export class RpcClient extends RpcChannel {
             if (this.socket) {
                 this.socket.destroy();
                 this.socket.unref();
+
+                let { dsn } = this;
+                for (let name in this.registry) {
+                    delete this.registry[name]["remoteSingletons"][dsn];
+                }
+
                 resolve(this);
             } else {
                 resolve(this);
@@ -224,7 +247,8 @@ export class RpcClient extends RpcChannel {
     }
 
     register<T extends object>(mod: ModuleProxy<T>): this {
-        let ins = new Proxy(mod.create(), {
+        this.registry[mod.name] = mod;
+        mod["remoteSingletons"][this.dsn] = new Proxy(getInstance(mod), {
             get: (ins, prop: string) => {
                 if (typeof ins[prop] === "function" && !ins[prop].proxified) {
                     set(ins, prop, this.createFunction(ins, mod.name, prop));
@@ -234,7 +258,6 @@ export class RpcClient extends RpcChannel {
             }
         });
 
-        (<T[]>mod["remoteSingletons"]).push(ins);
         return this;
     }
 

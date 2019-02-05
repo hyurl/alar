@@ -25,6 +25,22 @@ function set(target, prop, value, writable = false) {
     });
 }
 exports.set = set;
+function getInstance(mod) {
+    let ins;
+    if (typeof mod.ctor.getInstance === "function") {
+        ins = mod.ctor.getInstance();
+    }
+    else {
+        try {
+            ins = mod.create();
+        }
+        catch (err) {
+            ins = Object.create(mod.ctor.prototype);
+        }
+    }
+    return ins;
+}
+exports.getInstance = getInstance;
 function err2obj(err) {
     let props = ["name", "message", "stack"];
     return Object.assign({}, pick(err, props), omit(props));

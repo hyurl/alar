@@ -1,12 +1,13 @@
 import * as path from "path";
 import { applyMagic } from "js-magic";
-import { watch } from "chokidar";
+import { watch, FSWatcher } from "chokidar";
 import hash = require("string-hash");
 import objHash = require("object-hash");
 import startsWith = require("lodash/startsWith");
 import { RpcOptions, RpcChannel, RpcServer, RpcClient } from './rpc';
+import { getInstance } from './util';
 
-export { RpcOptions, RpcChannel };
+export { RpcOptions, RpcChannel, FSWatcher };
 
 // Simple Entry Proxy And Remote.
 
@@ -17,8 +18,11 @@ declare global {
     }
 
     interface ModuleProxy<T, R1 = any, R2 = any, R3 = any, R4 = any, R5 = any> {
+        /** The name (with namespace) of the module. */
         readonly name: string;
+        /** The path (without extension) of the module. */
         readonly path: string;
+        /** The very class constructor of the module. */
         readonly ctor: ModuleConstructor<T>;
 
         /** Creates a new instance of the module. */
@@ -45,8 +49,8 @@ declare global {
 
 @applyMagic
 export class ModuleProxy {
-    private root: string;
-    private remoteSingletons: any[] = [];
+    private root: { name: string, path: string };
+    private remoteSingletons: { [dsn: string]: any } = {};
     private children: { [name: string]: ModuleProxy } = {};
 
     constructor(
@@ -54,11 +58,14 @@ export class ModuleProxy {
         root: string,
         private singletons: { [name: string]: any } = {},
     ) {
-        this.root = path.normalize(root);
+        this.root = {
+            name: name.split(".")[0],
+            path: path.normalize(root)
+        };
     }
 
     get path(): string {
-        return path.resolve(this.root, ...this.name.split(".").slice(1));
+        return path.resolve(this.root.path, ...this.name.split(".").slice(1));
     }
 
     get ctor(): ModuleConstructor<any> {
@@ -89,15 +96,8 @@ export class ModuleProxy {
             return (this.singletons[this.name] = ins);
         } else if (this.singletons[this.name]) {
             return this.singletons[this.name];
-        } else if (typeof this.ctor.getInstance === "function") {
-            return (this.singletons[this.name] = this.ctor.getInstance());
         } else {
-            try {
-                ins = this.create();
-            } catch (err) {
-                ins = Object.create(this.ctor.prototype);
-            }
-            return (this.singletons[this.name] = ins);
+            return (this.singletons[this.name] = getInstance(this));
         }
     }
 
@@ -108,35 +108,40 @@ export class ModuleProxy {
      * traffic to the corresponding remote instance.
      */
     remote(route: any = ""): any {
-        let id = hash(objHash(route)) % this.remoteSingletons.length;
+        let keys = Object.keys(this.remoteSingletons);
+        let id = keys[hash(objHash(route)) % keys.length];
         return this.remoteSingletons[id];
     }
 
-    /** Serves a RPC service according to the given configuration. */
+    /** Serves an RPC service according to the given configuration. */
     serve(config: string | RpcOptions): Promise<RpcChannel> {
         return new RpcServer(<any>config).open();
     }
 
-    /** Serves a RPC service according to the given configuration. */
+    /** Connects an RPC service according to the given configuration. */
     connect(config: string | RpcOptions): Promise<RpcChannel> {
         return new RpcClient(<any>config).open();
     }
 
-    /** Watches file changes and reload the corresponding module. */
+    /** Watches file change and reload the corresponding module. */
     watch() {
-        let { root } = this;
+        let { name, path: root } = this.root;
         let pathToName = (filename: string) => {
-            return filename.slice(root.length + 1, -3).replace(/\\|\//g, ".");
+            let path = filename.slice(root.length + 1, -3);
+            return name + "." + path.replace(/\\|\//g, ".");
         };
         let clearCache = (filename: string) => {
             let ext = path.extname(filename);
-            if (ext === ".js" || ext === ".ts") {
-                delete this.singletons[pathToName(filename)];
+            let name = pathToName(filename);
+
+            if ((ext === ".js" || ext === ".ts") && require.cache[filename]) {
+                delete this.singletons[name];
                 delete require.cache[filename];
             }
         };
 
         return watch(root, {
+            persistent: false,
             awaitWriteFinish: true,
             followSymlinks: false
         }).on("change", clearCache)
@@ -161,7 +166,7 @@ export class ModuleProxy {
         } else if (typeof prop != "symbol") {
             return (this.children[prop] = new ModuleProxy(
                 (this.name && `${this.name}.`) + String(prop),
-                this.root,
+                this.root.path,
                 this.singletons,
             ));
         }
