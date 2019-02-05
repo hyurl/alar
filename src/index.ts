@@ -11,7 +11,7 @@ import { RpcOptions, RpcChannel, RpcServer, RpcClient } from './rpc';
 declare global {
     interface ModuleConstructor<T> {
         new(...args: any[]): T;
-        getInstance?(...args: any[]): T;
+        getInstance?(): T;
     }
 
     interface ModuleProxy<T, R1 = any, R2 = any, R3 = any, R4 = any, R5 = any> {
@@ -58,7 +58,7 @@ export class ModuleProxy {
         return path.resolve(this.root, ...this.name.split(".").slice(1));
     }
 
-    get ctor(): new (...args: any[]) => any {
+    get ctor(): ModuleConstructor<any> {
         let { path } = this;
         let mod = require.cache[path + ".ts"] || require.cache[path + ".js"];
 
@@ -80,8 +80,8 @@ export class ModuleProxy {
             return (this.singletons[this.name] = ins);
         } else if (this.singletons[this.name]) {
             return this.singletons[this.name];
-        } else if (typeof this.ctor["getInstance"] === "function") {
-            return (this.singletons[this.name] = this.ctor["getInstance"]());
+        } else if (typeof this.ctor.getInstance === "function") {
+            return (this.singletons[this.name] = this.ctor.getInstance());
         } else {
             try {
                 ins = this.create();

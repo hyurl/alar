@@ -41,8 +41,8 @@ let ModuleProxy = ModuleProxy_1 = class ModuleProxy {
         else if (this.singletons[this.name]) {
             return this.singletons[this.name];
         }
-        else if (typeof this.ctor["getInstance"] === "function") {
-            return (this.singletons[this.name] = this.ctor["getInstance"]());
+        else if (typeof this.ctor.getInstance === "function") {
+            return (this.singletons[this.name] = this.ctor.getInstance());
         }
         else {
             try {
