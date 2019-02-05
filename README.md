@@ -155,7 +155,7 @@ import { App } from "./index";
     service.register(app.service.user);
 
     console.log(await app.service.user.remote().getName()); // Mr. Handsome
-});
+})();
 ```
 
 ### Hot-reload in Remote Service
