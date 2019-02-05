@@ -34,9 +34,10 @@ declare global {
         instance(ins?: T): T;
 
         /**
-         * The `route` can be any value, the module proxy will automatically
-         * calculate it and direct the traffic to one of the remote instances 
-         * connected according to the route.
+         * Gets a remote instance connected according to the `route`.
+         * 
+         * The module proxy will automatically calculate the route and direct 
+         * the traffic to the corresponding remote instance.
          */
         remote(route?: any): T;
     }
@@ -77,6 +78,12 @@ export class ModuleProxy {
         return mod.default;
     }
 
+    /** Creates a new instance of the module. */
+    create(...args: any[]) {
+        return new this.ctor(...args);
+    }
+
+    /** Sets/Gets the singleton instance of the module. */
     instance(ins?: any) {
         if (ins) {
             return (this.singletons[this.name] = ins);
@@ -94,21 +101,25 @@ export class ModuleProxy {
         }
     }
 
-    create(...args: any[]) {
-        return new this.ctor(...args);
-    }
-
-    serve(server: string | RpcOptions): Promise<RpcChannel> {
-        return new RpcServer(<any>server).open();
-    }
-
-    connect(server: string | RpcOptions): Promise<RpcChannel> {
-        return new RpcClient(<any>server).open();
-    }
-
+    /**
+     * Gets a remote instance connected according to the `route`.
+     * 
+     * The module proxy will automatically calculate the route and direct the 
+     * traffic to the corresponding remote instance.
+     */
     remote(route: any = ""): any {
         let id = hash(objHash(route)) % this.remoteSingletons.length;
         return this.remoteSingletons[id];
+    }
+
+    /** Serves a RPC service according to the given configuration. */
+    serve(config: string | RpcOptions): Promise<RpcChannel> {
+        return new RpcServer(<any>config).open();
+    }
+
+    /** Serves a RPC service according to the given configuration. */
+    connect(config: string | RpcOptions): Promise<RpcChannel> {
+        return new RpcClient(<any>config).open();
     }
 
     /** Watches file changes and reload the corresponding module. */

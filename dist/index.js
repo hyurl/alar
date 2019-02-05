@@ -35,6 +35,9 @@ let ModuleProxy = ModuleProxy_1 = class ModuleProxy {
         }
         return mod.default;
     }
+    create(...args) {
+        return new this.ctor(...args);
+    }
     instance(ins) {
         if (ins) {
             return (this.singletons[this.name] = ins);
@@ -55,18 +58,15 @@ let ModuleProxy = ModuleProxy_1 = class ModuleProxy {
             return (this.singletons[this.name] = ins);
         }
     }
-    create(...args) {
-        return new this.ctor(...args);
-    }
-    serve(server) {
-        return new rpc_1.RpcServer(server).open();
-    }
-    connect(server) {
-        return new rpc_1.RpcClient(server).open();
-    }
     remote(route = "") {
         let id = hash(objHash(route)) % this.remoteSingletons.length;
         return this.remoteSingletons[id];
+    }
+    serve(config) {
+        return new rpc_1.RpcServer(config).open();
+    }
+    connect(config) {
+        return new rpc_1.RpcClient(config).open();
     }
     watch() {
         let { root } = this;

@@ -18,6 +18,7 @@ export interface RpcOptions {
     timeout?: number;
 }
 
+/** An RPC channel that allows modules to communicate remotely. */
 export abstract class RpcChannel implements RpcOptions {
     host = "";
     port = 0;
@@ -39,17 +40,20 @@ export abstract class RpcChannel implements RpcOptions {
     }
 
     /**
-     * Binds an error handler to be invoked whenever an error occurred in 
-     * asynchronous operations which can't be caught during run-time.
+     * Binds an error handler invoked whenever an error occurred in asynchronous
+     * operations which can't be caught during run-time.
      */
     onError(handler: (err: Error) => void) {
         this.errorHandler = handler;
     }
 
+    /** Opens the channel. */
     abstract open(): Promise<this>;
 
+    /** Closes the channel. */
     abstract close(): Promise<this>;
 
+    /** Registers a module proxy to the channel. */
     abstract register<T extends object>(mod: ModuleProxy<T>): this;
 }
 
@@ -219,7 +223,6 @@ export class RpcClient extends RpcChannel {
         });
     }
 
-    /** Binds a module proxy to the remote service. */
     register<T extends object>(mod: ModuleProxy<T>): this {
         let ins = new Proxy(mod.create(), {
             get: (ins, prop: string) => {
