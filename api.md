@@ -71,7 +71,11 @@ following extra properties and methods:
     service according to the given configuration.
 - `connect(config: string | RpcOptions): Promise<RpcChannel>` Connects an RPC 
     service according to the given configuration.
-- `watch(): FSWatcher` Watches file change and reload the corresponding module.
+- `resolve(path: string): string` Resolves the given path to a module name.
+- `watch(listener?: (event: "change" | "unlink", filename: string)): FSWatcher` 
+    Watches file change and reload the corresponding module.
+    - `listener` if provided, it will be called after the module cache has been
+        cleared.
     - `FSWatcher` is a type exposed by 
         [chokidar](https://github.com/paulmillr/chokidar).
 

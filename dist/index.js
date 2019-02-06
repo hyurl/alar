@@ -65,32 +65,42 @@ let ModuleProxy = ModuleProxy_1 = class ModuleProxy {
     connect(config) {
         return new rpc_1.RpcClient(config).open();
     }
-    watch() {
-        let { name, path } = this.root;
-        let pathToName = (filename) => {
-            let modPath = filename.slice(path.length + 1, -3);
-            return name + "." + modPath.replace(/\\|\//g, ".");
-        };
-        let clearCache = (filename) => {
-            let ext = path_1.extname(filename);
-            let name = pathToName(filename);
-            if ((ext === ".js" || ext === ".ts") && require.cache[filename]) {
+    resolve(path) {
+        let rootPath = this.root.path + path_1.sep;
+        if (startsWith(path, rootPath)) {
+            let modPath = path.slice(rootPath.length), ext = path_1.extname(modPath);
+            if (ext === ".js" || ext === ".ts") {
+                modPath = modPath.slice(0, -3);
+            }
+            return this.root.name + "." + modPath.replace(/\\|\//g, ".");
+        }
+        else {
+            return;
+        }
+    }
+    watch(listener) {
+        let { path } = this.root;
+        let clearCache = (event, filename, cb) => {
+            let name = this.resolve(filename);
+            if (name) {
                 delete this.singletons[name];
                 delete require.cache[filename];
+                cb && cb(event, filename);
             }
         };
         return chokidar_1.watch(path, {
             persistent: false,
             awaitWriteFinish: true,
             followSymlinks: false
-        }).on("change", clearCache)
-            .on("unlink", clearCache)
-            .on("unlinkDir", dirname => {
+        }).on("change", (filename) => {
+            clearCache("change", filename, listener);
+        }).on("unlink", (filename) => {
+            clearCache("unlink", filename, listener);
+        }).on("unlinkDir", dirname => {
             dirname = dirname + path_1.sep;
             for (let filename in require.cache) {
                 if (startsWith(filename, dirname)) {
-                    delete this.singletons[pathToName(filename)];
-                    delete require.cache[filename];
+                    clearCache("unlink", filename, listener);
                 }
             }
         });

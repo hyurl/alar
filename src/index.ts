@@ -123,20 +123,34 @@ export class ModuleProxy {
         return new RpcClient(<any>config).open();
     }
 
-    /** Watches file change and reload the corresponding module. */
-    watch() {
-        let { name, path } = this.root;
-        let pathToName = (filename: string) => {
-            let modPath = filename.slice(path.length + 1, -3);
-            return name + "." + modPath.replace(/\\|\//g, ".");
-        };
-        let clearCache = (filename: string) => {
-            let ext = extname(filename);
-            let name = pathToName(filename);
+    /** Resolves the given path to a module name. */
+    resolve(path: string): string {
+        let rootPath = this.root.path + sep;
 
-            if ((ext === ".js" || ext === ".ts") && require.cache[filename]) {
+        if (startsWith(path, rootPath)) {
+            let modPath = path.slice(rootPath.length),
+                ext = extname(modPath);
+
+            if (ext === ".js" || ext === ".ts") {
+                modPath = modPath.slice(0, -3);
+            }
+
+            return this.root.name + "." + modPath.replace(/\\|\//g, ".");
+        } else {
+            return;
+        }
+    }
+
+    /** Watches file change and reload the corresponding module. */
+    watch(listener?: (event: "change" | "unlink", filename: string) => void) {
+        let { path } = this.root;
+        let clearCache = (event: string, filename: string, cb: Function) => {
+            let name = this.resolve(filename);
+
+            if (name) {
                 delete this.singletons[name];
                 delete require.cache[filename];
+                cb && cb(event, filename);
             }
         };
 
@@ -144,18 +158,19 @@ export class ModuleProxy {
             persistent: false,
             awaitWriteFinish: true,
             followSymlinks: false
-        }).on("change", clearCache)
-            .on("unlink", clearCache)
-            .on("unlinkDir", dirname => {
-                dirname = dirname + sep;
+        }).on("change", (filename) => {
+            clearCache("change", filename, listener);
+        }).on("unlink", (filename) => {
+            clearCache("unlink", filename, listener);
+        }).on("unlinkDir", dirname => {
+            dirname = dirname + sep;
 
-                for (let filename in require.cache) {
-                    if (startsWith(filename, dirname)) {
-                        delete this.singletons[pathToName(filename)];
-                        delete require.cache[filename];
-                    }
+            for (let filename in require.cache) {
+                if (startsWith(filename, dirname)) {
+                    clearCache("unlink", filename, listener);
                 }
-            });
+            }
+        });
     }
 
     protected __get(prop: string) {

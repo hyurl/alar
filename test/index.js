@@ -30,6 +30,12 @@ describe("Alar ModuleProxy", () => {
         assert.strictEqual(app.service.user.ctor, User);
     });
 
+    it("should resolve module name according to the given path as expected", () => {
+        assert.strictEqual(app.resolve(app.service.user.path), "app.service.user");
+        assert.strictEqual(app.resolve(app.service.user.path + ".js"), "app.service.user");
+        assert.strictEqual(app.resolve(app.service.user.path + ".ts"), "app.service.user");
+    });
+
     it("should create instances via create() method asexpected", () => {
         var user1 = app.service.user.create("Mr. Handsome");
         var user2 = app.service.user.create("Mr. World");
