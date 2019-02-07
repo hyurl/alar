@@ -155,7 +155,6 @@ export class ModuleProxy {
         };
 
         return watch(path, {
-            persistent: false,
             awaitWriteFinish: true,
             followSymlinks: false
         }).on("change", (filename) => {

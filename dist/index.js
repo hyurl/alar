@@ -89,7 +89,6 @@ let ModuleProxy = ModuleProxy_1 = class ModuleProxy {
             }
         };
         return chokidar_1.watch(path, {
-            persistent: false,
             awaitWriteFinish: true,
             followSymlinks: false
         }).on("change", (filename) => {
