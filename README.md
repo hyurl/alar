@@ -1,4 +1,4 @@
-# Alar (progressing)
+# Alar
 
 Alar is a light-weight framework that provides applications the ability to 
 auto-load and hot-reload modules, and the ability to serve and connect remote 
