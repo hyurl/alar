@@ -43,7 +43,7 @@ function getInstance(mod) {
 exports.getInstance = getInstance;
 function err2obj(err) {
     let props = ["name", "message", "stack"];
-    return Object.assign({}, pick(err, props), omit(props));
+    return Object.assign({}, pick(err, props), omit(err, props));
 }
 exports.err2obj = err2obj;
 function obj2err(obj) {
