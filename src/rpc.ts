@@ -3,6 +3,7 @@ import * as path from "path";
 import * as fs from "fs-extra";
 import { send, receive } from "bsp";
 import isSocketResetError = require("is-socket-reset-error");
+import sleep = require("sleep-promise");
 import { set, obj2err, err2obj, absPath, getInstance } from './util';
 
 export enum RpcEvents {
@@ -153,7 +154,11 @@ export class RpcServer extends RpcChannel {
 
 export class RpcClient extends RpcChannel {
     private socket: net.Socket;
+    private connecting = false;
+    private connected = false;
+    private closed = false;
     private queue: any[][] = [];
+    private remains: any[] = [];
     private taskId: number = 0;
     private registry: { [name: string]: ModuleProxy<any> } = {};
     private tasks: {
@@ -164,56 +169,39 @@ export class RpcClient extends RpcChannel {
     } = {};
 
     open(): Promise<this> {
+        this.connecting = true;
         return new Promise((resolve, reject) => {
-            let resolved = false;
             let listener = () => {
-                !resolved && resolve(this);
+                !this.connected && resolve(this);
+                this.connected = true;
+                this.connecting = false;
 
                 while (this.queue.length) {
                     let data = this.queue.shift();
                     this.send(...data);
                 }
             };
-            let connect = () => {
-                if (this.path) {
-                    this.socket = net.createConnection(absPath(this.path, true), listener);
-                } else {
-                    this.socket = net.createConnection(this.port, this.host, listener);
-                }
-            };
-            let remains: any[] = [];
 
-            connect();
+            if (this.path) {
+                this.socket = net.createConnection(absPath(this.path, true), listener);
+            } else {
+                this.socket = net.createConnection(this.port, this.host, listener);
+            }
 
             this.socket.once("error", err => {
-                !resolved && reject(err);
-            }).on("error", err => {
-                if (isSocketResetError(err)) {
-                    this.socket.unref();
-
-                    let times = 0;
-                    let maxTimes = Math.round(this.timeout / 50);
-                    let reconnect = () => {
-                        let timer = setTimeout(() => {
-                            connect();
-                            times++;
-
-                            if (!this.socket.destroyed
-                                || this.socket.connecting) {
-                                clearTimeout(timer);
-                            } else if (times === maxTimes) {
-                                clearTimeout(timer);
-                                this.errorHandler.call(this, err);
-                            } else {
-                                reconnect();
-                            }
-                        }, 50);
-                    };
-                } else if (this.errorHandler && resolved) {
+                if (this.connecting) {
+                    this.connecting = false;
+                    reject(err);
+                } else if (isSocketResetError(err) && !this.connecting) {
+                    this.reconnect(err);
+                } else if (this.errorHandler && this.connected) {
                     this.errorHandler.call(this, err);
                 }
+            }).on("close", hadError => {
+                this.connected = false;
+                !hadError && !this.closed && this.reconnect(null);
             }).on("data", buf => {
-                let msg = receive<[number, number, any]>(buf, remains);
+                let msg = receive<[number, number, any]>(buf, this.remains);
 
                 for (let [event, taskId, data] of msg) {
                     if (this.tasks[taskId]) {
@@ -233,6 +221,7 @@ export class RpcClient extends RpcChannel {
             if (this.socket) {
                 this.socket.destroy();
                 this.socket.unref();
+                this.closed = true;
 
                 let { dsn } = this;
                 for (let name in this.registry) {
@@ -259,6 +248,28 @@ export class RpcClient extends RpcChannel {
         });
 
         return this;
+    }
+
+    private async reconnect(err: Error, times = 0) {
+        let maxTimes = Math.round(this.timeout / 50);
+
+        this.socket.unref();
+
+        try {
+            await this.open();
+        } catch (e) {
+            err || (err = e);
+            this.connecting = false;
+        }
+
+        if (this.socket.destroyed || !this.socket.connecting) {
+            if (times === maxTimes) {
+                this.errorHandler && this.errorHandler.call(this, err);
+            } else {
+                await sleep(50);
+                await this.reconnect(err, ++times);
+            }
+        }
     }
 
     private send(...data: any[]) {
@@ -309,7 +320,13 @@ export class RpcClient extends RpcChannel {
                     }
                 };
 
-                $this.send(RpcEvents.REQUEST, taskId, name, method, ...args);
+                if (!$this.connecting && !$this.connected && !$this.closed) {
+                    $this.reconnect(null).then(() => {
+                        $this.send(RpcEvents.REQUEST, taskId, name, method, ...args);
+                    });
+                } else {
+                    $this.send(RpcEvents.REQUEST, taskId, name, method, ...args);
+                }
             });
         };
 
