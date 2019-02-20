@@ -33,10 +33,14 @@ export function getInstance<T>(mod: ModuleProxy<T>): T {
     let ins: T;
     let { ctor } = mod;
 
-    if (ctor && typeof ctor.getInstance === "function") {
-        ins = ctor.getInstance();
-    } else if ((ins = <any>mod.proto) === null) {
-        ins = mod.create();
+    if (ctor) {
+        if (typeof ctor.getInstance === "function") {
+            ins = ctor.getInstance();
+        } else {
+            ins = mod.create();
+        }
+    } else {
+        ins = <any>mod.proto;
     }
 
     return ins;

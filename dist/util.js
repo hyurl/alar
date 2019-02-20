@@ -28,11 +28,16 @@ exports.set = set;
 function getInstance(mod) {
     let ins;
     let { ctor } = mod;
-    if (ctor && typeof ctor.getInstance === "function") {
-        ins = ctor.getInstance();
+    if (ctor) {
+        if (typeof ctor.getInstance === "function") {
+            ins = ctor.getInstance();
+        }
+        else {
+            ins = mod.create();
+        }
     }
-    else if ((ins = mod.proto) === null) {
-        ins = mod.create();
+    else {
+        ins = mod.proto;
     }
     return ins;
 }
