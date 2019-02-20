@@ -69,6 +69,26 @@ describe("Alar ModuleProxy", () => {
         assert.strictEqual(app.service.user.instance().name, "Mr. Handsome");
     });
 
+    it("should access to a prototype module as expected", () => {
+        assert.strictEqual(app.config.name, "app.config");
+        assert.strictEqual(app.config.path, path.normalize(__dirname + "/app/config"));
+        assert.deepStrictEqual(app.config.proto, require(__dirname + "/app/config").default);
+    });
+
+    it("should create instance from a prototype module as expected", () => {
+        let ins = app.config.create();
+        let mod = require(__dirname + "/app/config").default;
+        assert.strictEqual(Object.getPrototypeOf(ins), mod);
+        assert.strictEqual(ins.name, mod.name);
+        assert.strictEqual(ins.version, mod.version);
+    });
+
+    it("should use the prototype module as singleton as expected", () => {
+        let ins = app.config.instance();
+        let mod = require(__dirname + "/app/config").default;
+        assert.strictEqual(ins, mod);
+    });
+
     // it("should watch file change and reload module as expected", (done) => {
     //     awaiter(null, null, null, function* () {
     //         var watcher = app.watch();

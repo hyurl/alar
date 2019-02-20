@@ -27,16 +27,12 @@ function set(target, prop, value, writable = false) {
 exports.set = set;
 function getInstance(mod) {
     let ins;
-    if (typeof mod.ctor.getInstance === "function") {
-        ins = mod.ctor.getInstance();
+    let { ctor } = mod;
+    if (ctor && typeof ctor.getInstance === "function") {
+        ins = ctor.getInstance();
     }
-    else {
-        try {
-            ins = mod.create();
-        }
-        catch (err) {
-            ins = Object.create(mod.ctor.prototype);
-        }
+    else if ((ins = mod.proto) === null) {
+        ins = mod.create();
     }
     return ins;
 }

@@ -31,15 +31,12 @@ export function set(target, prop, value, writable = false) {
 
 export function getInstance<T>(mod: ModuleProxy<T>): T {
     let ins: T;
+    let { ctor } = mod;
 
-    if (typeof mod.ctor.getInstance === "function") {
-        ins = mod.ctor.getInstance();
-    } else {
-        try {
-            ins = mod.create();
-        } catch (err) {
-            ins = Object.create(mod.ctor.prototype);
-        }
+    if (ctor && typeof ctor.getInstance === "function") {
+        ins = ctor.getInstance();
+    } else if ((ins = <any>mod.proto) === null) {
+        ins = mod.create();
     }
 
     return ins;

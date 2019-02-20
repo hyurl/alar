@@ -22,6 +22,10 @@ declare global {
         readonly name: string;
         /** The path (without extension) of the module. */
         readonly path: string;
+        /** The very exports object of the module. */
+        readonly exports: any;
+        /** The very prototype of the module. */
+        readonly proto: object;
         /** The very class constructor of the module. */
         readonly ctor: ModuleConstructor<T>;
 
@@ -68,26 +72,39 @@ export class ModuleProxy {
         return resolve(this.root.path, ...this.name.split(".").slice(1));
     }
 
-    get ctor(): ModuleConstructor<any> {
-        let { path } = this;
-        let mod = require.cache[path + ".ts"] || require.cache[path + ".js"];
+    get exports(): any {
+        return require(this.path);
+    }
 
-        if (!mod) {
-            mod = require(path);
+    get proto(): object {
+        let { exports } = this;
 
-            if (!mod.default || typeof mod.default !== "function") {
-                throw new TypeError(`Module ${this.name} is not a constructor.`);
+        if (exports.default) {
+            if (typeof exports.default === "object") {
+                return exports.default;
+            } else if (typeof exports.default === "function") {
+                return exports.default.prototype;
             }
-        } else {
-            mod = mod.exports;
         }
 
-        return mod.default;
+        return null;
+    }
+
+    get ctor(): ModuleConstructor<any> {
+        let { exports } = this;
+
+        return typeof exports.default === "function" ? exports.default : null;
     }
 
     /** Creates a new instance of the module. */
     create(...args: any[]) {
-        return new this.ctor(...args);
+        if (this.ctor) {
+            return new this.ctor(...args);
+        } else if (this.proto) {
+            return Object.create(this.proto);
+        } else {
+            throw new TypeError(`${this.name} is not a valid module.`);
+        }
     }
 
     /** Sets/Gets the singleton instance of the module. */

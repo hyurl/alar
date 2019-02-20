@@ -11,6 +11,8 @@ The interface has the following properties and methods:
 
 - `name: string` The name (with namespace) of the module.
 - `path: string` The path (without extension) of the module.
+- `exports: any` The very exports object of the module.
+- `proto: object` The very prototype of the module.
 - `ctor: ModuleConstructor<T>` The very class constructor of the module.
 - `create()` Creates a new instance of the module.
     - `create(arg1: R1): T`

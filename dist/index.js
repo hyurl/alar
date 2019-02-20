@@ -26,22 +26,35 @@ let ModuleProxy = ModuleProxy_1 = class ModuleProxy {
     get path() {
         return path_1.resolve(this.root.path, ...this.name.split(".").slice(1));
     }
-    get ctor() {
-        let { path } = this;
-        let mod = require.cache[path + ".ts"] || require.cache[path + ".js"];
-        if (!mod) {
-            mod = require(path);
-            if (!mod.default || typeof mod.default !== "function") {
-                throw new TypeError(`Module ${this.name} is not a constructor.`);
+    get exports() {
+        return require(this.path);
+    }
+    get proto() {
+        let { exports } = this;
+        if (exports.default) {
+            if (typeof exports.default === "object") {
+                return exports.default;
+            }
+            else if (typeof exports.default === "function") {
+                return exports.default.prototype;
             }
         }
-        else {
-            mod = mod.exports;
-        }
-        return mod.default;
+        return null;
+    }
+    get ctor() {
+        let { exports } = this;
+        return typeof exports.default === "function" ? exports.default : null;
     }
     create(...args) {
-        return new this.ctor(...args);
+        if (this.ctor) {
+            return new this.ctor(...args);
+        }
+        else if (this.proto) {
+            return Object.create(this.proto);
+        }
+        else {
+            throw new TypeError(`${this.name} is not a valid module.`);
+        }
     }
     instance(ins) {
         if (ins) {

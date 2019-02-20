@@ -45,8 +45,8 @@ App.watch();
 ```
 
 In other files, just define and export a default class (Alar only supports the
-`default class` exported), and merge the type to the namespace `app`, so that 
-another file can access it directly via namespace.
+`default` exports), and merge the type to the namespace `app`, so that another 
+file can access it directly via namespace.
 
 ```typescript
 // src/bootstrap.ts
@@ -95,6 +95,30 @@ app.bootstrap.instance().init();
 // The create() method will create a new instance.
 var user = app.service.user.create("Mr. Handsome");
 console.log(user.getName()); // Mr. Handsome
+```
+
+### Prototype Module
+
+Any module that exports an object as default will be considered as a prototype 
+module, when calling `create()` of that module, the object will be used as a 
+prototype, however when calling `instance()` of that module, the object itself 
+will be used as the singleton.
+
+```typescript
+// src/config.ts
+declare global {
+    namespace app {
+        const config: ModuleProxy<Config>;
+    }
+}
+
+export interface Config {
+    // ...
+}
+
+export default <Config>{
+    // ...
+}
 ```
 
 ## Remote Service
