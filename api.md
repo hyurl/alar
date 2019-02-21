@@ -80,6 +80,45 @@ following extra properties and methods:
         cleared.
     - `FSWatcher` is a type exposed by 
         [chokidar](https://github.com/paulmillr/chokidar).
+- `setLoader(loader: ModuleLoader): void` Sets a custom loader to resolve the 
+    module.
+
+# ModuleLoader
+
+```typescript
+export interface ModuleLoader {
+    extesion: string,
+    load(path: string): any;
+    remove(path: string): void;
+}
+```
+
+By default, Alar supports JavaScript modules and (TypeScript modules in 
+**ts-node**), By setting a custom loader, a ModuleProxy instance can resolve any
+kind of module wanted.
+
+- `extesion` Extension name of the module file, by default, it's `.js`.
+- `load(path: string): any` Loads module from the given `path` (`extension` 
+    excluded) or cache.
+- `remove(path: string): void` Removes module from cache when watcher is running.
+
+```typescript
+// Add a loader to resolve JSON modules.
+var json = new alar.ModuleProxy("json", __dirname + "/json");
+var cache = {};
+
+json.setLoader({
+    extesion: ".json",
+    load(path) {
+        return cache[path] || (
+            cache[path] = JSON.parse(fs.readFileSync(path + this.extesion, "utf8"))
+        );
+    },
+    remove(path) {
+        cache[path] && (delete cache[path]);
+    }
+});
+```
 
 # RpcOptions
 

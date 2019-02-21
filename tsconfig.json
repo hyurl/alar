@@ -13,6 +13,7 @@
         "pretty": true,
         "removeComments": true,
         "sourceMap": true,
+        "noImplicitThis": true,
         "lib": [
             "es2015",
             "es2016.array.include"

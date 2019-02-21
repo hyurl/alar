@@ -44,9 +44,11 @@ export const App = global["app"] = new ModuleProxy("app", __dirname);
 App.watch();
 ```
 
-In other files, just define and export a default class (Alar only supports the
-`default` exports), and merge the type to the namespace `app`, so that another 
-file can access it directly via namespace.
+In other files, just define and export a default class, and merge the type to 
+the namespace `app`, so that another file can access it directly via namespace.
+
+(NOTE: Alar offers first priority of the `default` export, if a module doesn't 
+have default export, Alar will try to load the entire exports object instead.)
 
 ```typescript
 // src/bootstrap.ts

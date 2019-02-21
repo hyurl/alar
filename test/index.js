@@ -33,7 +33,6 @@ describe("Alar ModuleProxy", () => {
     it("should resolve module name according to the given path as expected", () => {
         assert.strictEqual(app.resolve(app.service.user.path), "app.service.user");
         assert.strictEqual(app.resolve(app.service.user.path + ".js"), "app.service.user");
-        assert.strictEqual(app.resolve(app.service.user.path + ".ts"), "app.service.user");
     });
 
     it("should create instances via create() method asexpected", () => {
@@ -154,5 +153,24 @@ describe("Alar ModuleProxy", () => {
             yield server.close();
             done();
         });
+    });
+
+    it("should use a custom loader to load JSON module as expected", () => {
+        var json = new alar.ModuleProxy("json", __dirname + "/json");
+        var cache = {};
+        json.setLoader({
+            extesion: ".json",
+            load(path) {
+                return cache[path] || (
+                    cache[path] = JSON.parse(fs.readFileSync(path + this.extesion, "utf8"))
+                );
+            },
+            remove(path) {
+                cache[path] && (delete cache[path]);
+            }
+        });
+
+        assert.deepStrictEqual(json.test.instance(), { name: "JSON", version: "1.0.0" });
+        assert.strictEqual(Object.getPrototypeOf(json.test.create()), json.test.instance());
     });
 });

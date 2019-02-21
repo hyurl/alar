@@ -12,10 +12,19 @@ const startsWith = require("lodash/startsWith");
 const rpc_1 = require("./rpc");
 exports.RpcChannel = rpc_1.RpcChannel;
 const util_1 = require("./util");
+const isTsNode = process.execArgv.join(" ").includes("ts-node");
+const defaultLoader = {
+    extesion: ".js",
+    load: require,
+    remove(path) {
+        delete require.cache[path + this.extesion];
+    }
+};
 let ModuleProxy = ModuleProxy_1 = class ModuleProxy {
-    constructor(name, path, singletons = {}) {
+    constructor(name, path) {
         this.name = name;
-        this.singletons = singletons;
+        this.loader = defaultLoader;
+        this.singletons = {};
         this.remoteSingletons = {};
         this.children = {};
         this.root = {
@@ -27,23 +36,29 @@ let ModuleProxy = ModuleProxy_1 = class ModuleProxy {
         return path_1.resolve(this.root.path, ...this.name.split(".").slice(1));
     }
     get exports() {
-        return require(this.path);
+        return this.loader.load(this.path);
     }
     get proto() {
         let { exports } = this;
-        if (exports.default) {
-            if (typeof exports.default === "object") {
-                return exports.default;
-            }
-            else if (typeof exports.default === "function") {
-                return exports.default.prototype;
-            }
-        }
-        return null;
+        if (typeof exports.default === "object")
+            return exports.default;
+        else if (typeof exports.default === "function")
+            return exports.default.prototype;
+        else if (typeof exports === "object")
+            return exports;
+        else if (typeof exports === "function")
+            return exports.prototype;
+        else
+            return null;
     }
     get ctor() {
         let { exports } = this;
-        return typeof exports.default === "function" ? exports.default : null;
+        if (typeof exports.default === "function")
+            return exports.default;
+        else if (typeof exports === "function")
+            return exports;
+        else
+            return null;
     }
     create(...args) {
         if (this.ctor) {
@@ -82,11 +97,11 @@ let ModuleProxy = ModuleProxy_1 = class ModuleProxy {
         let rootPath = this.root.path + path_1.sep;
         if (startsWith(path, rootPath)) {
             let modPath = path.slice(rootPath.length), ext = path_1.extname(modPath);
-            if (ext === ".js" || ext === ".ts") {
-                modPath = modPath.slice(0, -3);
+            if (ext === this.loader.extesion || (this.loader.extesion === ".js" && isTsNode && [".ts", ".tsx"].includes(ext))) {
+                modPath = modPath.slice(0, -this.loader.extesion.length);
             }
             else if (ext) {
-                return null;
+                return;
             }
             return this.root.name + "." + modPath.replace(/\\|\//g, ".");
         }
@@ -100,7 +115,7 @@ let ModuleProxy = ModuleProxy_1 = class ModuleProxy {
             let name = this.resolve(filename);
             if (name) {
                 delete this.singletons[name];
-                delete require.cache[filename];
+                this.loader.remove(filename.slice(0, -this.loader.extesion.length));
                 cb && cb(event, filename);
             }
         };
@@ -120,6 +135,9 @@ let ModuleProxy = ModuleProxy_1 = class ModuleProxy {
             }
         });
     }
+    setLoader(loader) {
+        this.loader = loader;
+    }
     __get(prop) {
         if (prop in this) {
             return this[prop];
@@ -128,7 +146,10 @@ let ModuleProxy = ModuleProxy_1 = class ModuleProxy {
             return this.children[prop];
         }
         else if (typeof prop != "symbol") {
-            return (this.children[prop] = new ModuleProxy_1((this.name && `${this.name}.`) + String(prop), this.root.path, this.singletons));
+            this.children[prop] = new ModuleProxy_1((this.name && `${this.name}.`) + String(prop), this.root.path);
+            this.children[prop].singletons = this.singletons;
+            this.children[prop].loader = this.loader;
+            return this.children[prop];
         }
     }
     __has(prop) {

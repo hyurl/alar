@@ -51,16 +51,35 @@ declare global {
     }
 }
 
+export interface ModuleLoader {
+    /** Extension name of the module file, by default, it's `.js`. */
+    extesion: string,
+    /** Loads module from the given `path` (`extension` excluded) or cache. */
+    load(path: string): any;
+    /** Removes module from cache when watcher is running. */
+    remove(path: string): void;
+}
+
+const isTsNode = process.execArgv.join(" ").includes("ts-node");
+const defaultLoader: ModuleLoader = {
+    extesion: ".js",
+    load: require,
+    remove(path) {
+        delete require.cache[path + this.extesion];
+    }
+}
+
 @applyMagic
 export class ModuleProxy {
     private root: { name: string, path: string };
+    private loader: ModuleLoader = defaultLoader;
+    private singletons: { [name: string]: any } = {};
     private remoteSingletons: { [dsn: string]: any } = {};
     private children: { [name: string]: ModuleProxy } = {};
 
     constructor(
         readonly name: string,
         path: string,
-        private singletons: { [name: string]: any } = {},
     ) {
         this.root = {
             name: name.split(".")[0],
@@ -73,27 +92,33 @@ export class ModuleProxy {
     }
 
     get exports(): any {
-        return require(this.path);
+        return this.loader.load(this.path);
     }
 
     get proto(): object {
         let { exports } = this;
 
-        if (exports.default) {
-            if (typeof exports.default === "object") {
-                return exports.default;
-            } else if (typeof exports.default === "function") {
-                return exports.default.prototype;
-            }
-        }
-
-        return null;
+        if (typeof exports.default === "object")
+            return exports.default;
+        else if (typeof exports.default === "function")
+            return exports.default.prototype;
+        else if (typeof exports === "object")
+            return exports;
+        else if (typeof exports === "function")
+            return exports.prototype;
+        else
+            return null;
     }
 
     get ctor(): ModuleConstructor<any> {
         let { exports } = this;
 
-        return typeof exports.default === "function" ? exports.default : null;
+        if (typeof exports.default === "function")
+            return exports.default;
+        else if (typeof exports === "function")
+            return exports;
+        else
+            return null;
     }
 
     /** Creates a new instance of the module. */
@@ -148,10 +173,12 @@ export class ModuleProxy {
             let modPath = path.slice(rootPath.length),
                 ext = extname(modPath);
 
-            if (ext === ".js" || ext === ".ts") {
-                modPath = modPath.slice(0, -3);
+            if (ext === this.loader.extesion || (
+                this.loader.extesion === ".js" && isTsNode && [".ts", ".tsx"].includes(ext)
+            )) {
+                modPath = modPath.slice(0, -this.loader.extesion.length);
             } else if (ext) {
-                return null;
+                return;
             }
 
             return this.root.name + "." + modPath.replace(/\\|\//g, ".");
@@ -168,7 +195,7 @@ export class ModuleProxy {
 
             if (name) {
                 delete this.singletons[name];
-                delete require.cache[filename];
+                this.loader.remove(filename.slice(0, -this.loader.extesion.length));
                 cb && cb(event, filename);
             }
         };
@@ -191,17 +218,24 @@ export class ModuleProxy {
         });
     }
 
+    /** Sets a custom loader to resolve the module. */
+    setLoader(loader: ModuleLoader) {
+        this.loader = loader;
+    }
+
     protected __get(prop: string) {
         if (prop in this) {
             return this[prop];
         } else if (prop in this.children) {
             return this.children[prop];
         } else if (typeof prop != "symbol") {
-            return (this.children[prop] = new ModuleProxy(
+            this.children[prop] = new ModuleProxy(
                 (this.name && `${this.name}.`) + String(prop),
-                this.root.path,
-                this.singletons,
-            ));
+                this.root.path
+            );
+            this.children[prop].singletons = this.singletons;
+            this.children[prop].loader = this.loader;
+            return this.children[prop];
         }
     }
 
