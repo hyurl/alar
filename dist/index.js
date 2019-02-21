@@ -23,17 +23,11 @@ const defaultLoader = {
 let ModuleProxy = ModuleProxy_1 = class ModuleProxy {
     constructor(name, path) {
         this.name = name;
+        this.path = path;
         this.loader = defaultLoader;
         this.singletons = {};
         this.remoteSingletons = {};
         this.children = {};
-        this.root = {
-            name: name.split(".")[0],
-            path: path_1.normalize(path)
-        };
-    }
-    get path() {
-        return path_1.resolve(this.root.path, ...this.name.split(".").slice(1));
     }
     get exports() {
         return this.loader.load(this.path);
@@ -94,23 +88,23 @@ let ModuleProxy = ModuleProxy_1 = class ModuleProxy {
         return new rpc_1.RpcClient(config).open();
     }
     resolve(path) {
-        let rootPath = this.root.path + path_1.sep;
-        if (startsWith(path, rootPath)) {
-            let modPath = path.slice(rootPath.length), ext = path_1.extname(modPath);
+        let dir = this.path + path_1.sep;
+        if (startsWith(path, dir)) {
+            let modPath = path.slice(dir.length), ext = path_1.extname(modPath);
             if (ext === this.loader.extesion) {
                 modPath = modPath.slice(0, -this.loader.extesion.length);
             }
             else if (ext) {
                 return;
             }
-            return this.root.name + "." + modPath.replace(/\\|\//g, ".");
+            return this.name + "." + modPath.replace(/\\|\//g, ".");
         }
         else {
             return;
         }
     }
     watch(listener) {
-        let { path } = this.root;
+        let { path } = this;
         let clearCache = (event, filename, cb) => {
             let name = this.resolve(filename);
             if (name) {
@@ -146,10 +140,10 @@ let ModuleProxy = ModuleProxy_1 = class ModuleProxy {
             return this.children[prop];
         }
         else if (typeof prop != "symbol") {
-            this.children[prop] = new ModuleProxy_1((this.name && `${this.name}.`) + String(prop), this.root.path);
-            this.children[prop].singletons = this.singletons;
-            this.children[prop].loader = this.loader;
-            return this.children[prop];
+            let child = this.children[prop] = new ModuleProxy_1(this.name + "." + String(prop), this.path + path_1.sep + String(prop));
+            child.singletons = this.singletons;
+            child.loader = this.loader;
+            return child;
         }
     }
     __has(prop) {

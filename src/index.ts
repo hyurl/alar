@@ -1,4 +1,4 @@
-import { resolve, normalize, extname, sep } from "path";
+import { extname, sep } from "path";
 import { applyMagic } from "js-magic";
 import { watch, FSWatcher } from "chokidar";
 import hash = require("string-hash");
@@ -10,6 +10,9 @@ import { getInstance } from './util';
 export { RpcOptions, RpcChannel, FSWatcher };
 
 // Auto-Load And Remote.
+
+type FunctionPropertyNames<T> = { [K in keyof T]: T[K] extends Function ? K : never }[keyof T];
+type FunctionProperties<T> = Pick<T, FunctionPropertyNames<T>>;
 
 declare global {
     interface ModuleConstructor<T> {
@@ -25,7 +28,7 @@ declare global {
         /** The very exports object of the module. */
         readonly exports: any;
         /** The very prototype of the module. */
-        readonly proto: object;
+        readonly proto: T;
         /** The very class constructor of the module. */
         readonly ctor: ModuleConstructor<T>;
 
@@ -47,7 +50,7 @@ declare global {
          * The module proxy will automatically calculate the route and direct 
          * the traffic to the corresponding remote instance.
          */
-        remote(route?: any): T;
+        remote(route?: any): FunctionProperties<T>;
     }
 }
 
@@ -76,32 +79,19 @@ const defaultLoader: ModuleLoader = {
 }
 
 @applyMagic
-export class ModuleProxy {
-    private root: { name: string, path: string };
+export class ModuleProxy<T = any> {
     private loader: ModuleLoader = defaultLoader;
-    private singletons: { [name: string]: any } = {};
-    private remoteSingletons: { [dsn: string]: any } = {};
+    private singletons: { [name: string]: T } = {};
+    private remoteSingletons: { [dsn: string]: FunctionProperties<T> } = {};
     private children: { [name: string]: ModuleProxy } = {};
 
-    constructor(
-        readonly name: string,
-        path: string,
-    ) {
-        this.root = {
-            name: name.split(".")[0],
-            path: normalize(path)
-        };
-    }
-
-    get path(): string {
-        return resolve(this.root.path, ...this.name.split(".").slice(1));
-    }
+    constructor(readonly name: string, readonly path: string, ) { }
 
     get exports(): any {
         return this.loader.load(this.path);
     }
 
-    get proto(): object {
+    get proto(): T {
         let { exports } = this;
 
         if (typeof exports.default === "object")
@@ -116,7 +106,7 @@ export class ModuleProxy {
             return null;
     }
 
-    get ctor(): ModuleConstructor<any> {
+    get ctor(): ModuleConstructor<T> {
         let { exports } = this;
 
         if (typeof exports.default === "function")
@@ -128,18 +118,18 @@ export class ModuleProxy {
     }
 
     /** Creates a new instance of the module. */
-    create(...args: any[]) {
+    create(...args: any[]): T {
         if (this.ctor) {
             return new this.ctor(...args);
         } else if (this.proto) {
-            return Object.create(this.proto);
+            return Object.create(<any>this.proto);
         } else {
             throw new TypeError(`${this.name} is not a valid module.`);
         }
     }
 
     /** Sets/Gets the singleton instance of the module. */
-    instance(ins?: any) {
+    instance(ins?: T): T {
         if (ins) {
             return (this.singletons[this.name] = ins);
         } else if (this.singletons[this.name]) {
@@ -155,7 +145,7 @@ export class ModuleProxy {
      * The module proxy will automatically calculate the route and direct the 
      * traffic to the corresponding remote instance.
      */
-    remote(route: any = ""): any {
+    remote(route: any = ""): FunctionProperties<T> {
         let keys = Object.keys(this.remoteSingletons);
         let id = keys[hash(objHash(route)) % keys.length];
         return this.remoteSingletons[id];
@@ -173,10 +163,10 @@ export class ModuleProxy {
 
     /** Resolves the given path to a module name. */
     resolve(path: string): string {
-        let rootPath = this.root.path + sep;
+        let dir = this.path + sep;
 
-        if (startsWith(path, rootPath)) {
-            let modPath = path.slice(rootPath.length),
+        if (startsWith(path, dir)) {
+            let modPath = path.slice(dir.length),
                 ext = extname(modPath);
 
             if (ext === this.loader.extesion) {
@@ -185,7 +175,7 @@ export class ModuleProxy {
                 return;
             }
 
-            return this.root.name + "." + modPath.replace(/\\|\//g, ".");
+            return this.name + "." + modPath.replace(/\\|\//g, ".");
         } else {
             return;
         }
@@ -193,7 +183,7 @@ export class ModuleProxy {
 
     /** Watches file change and reload the corresponding module. */
     watch(listener?: (event: "change" | "unlink", filename: string) => void) {
-        let { path } = this.root;
+        let { path } = this;
         let clearCache = (event: string, filename: string, cb: Function) => {
             let name = this.resolve(filename);
 
@@ -233,13 +223,14 @@ export class ModuleProxy {
         } else if (prop in this.children) {
             return this.children[prop];
         } else if (typeof prop != "symbol") {
-            this.children[prop] = new ModuleProxy(
-                (this.name && `${this.name}.`) + String(prop),
-                this.root.path
+            let child = this.children[prop] = new ModuleProxy(
+                this.name + "." + String(prop),
+                this.path + sep + String(prop)
             );
-            this.children[prop].singletons = this.singletons;
-            this.children[prop].loader = this.loader;
-            return this.children[prop];
+
+            child.singletons = this.singletons;
+            child.loader = this.loader;
+            return child;
         }
     }
 
