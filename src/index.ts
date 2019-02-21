@@ -87,11 +87,11 @@ export class ModuleProxy<T = any> {
 
     constructor(readonly name: string, readonly path: string, ) { }
 
-    get exports(): any {
+    protected get exports(): any {
         return this.loader.load(this.path);
     }
 
-    get proto(): T {
+    protected get proto(): T {
         let { exports } = this;
 
         if (typeof exports.default === "object")
@@ -106,7 +106,7 @@ export class ModuleProxy<T = any> {
             return null;
     }
 
-    get ctor(): ModuleConstructor<T> {
+    protected get ctor(): ModuleConstructor<T> {
         let { exports } = this;
 
         if (typeof exports.default === "function")
@@ -118,7 +118,7 @@ export class ModuleProxy<T = any> {
     }
 
     /** Creates a new instance of the module. */
-    create(...args: any[]): T {
+    protected create(...args: any[]): T {
         if (this.ctor) {
             return new this.ctor(...args);
         } else if (this.proto) {
@@ -129,13 +129,13 @@ export class ModuleProxy<T = any> {
     }
 
     /** Sets/Gets the singleton instance of the module. */
-    instance(ins?: T): T {
+    protected instance(ins?: T): T {
         if (ins) {
             return (this.singletons[this.name] = ins);
         } else if (this.singletons[this.name]) {
             return this.singletons[this.name];
         } else {
-            return (this.singletons[this.name] = getInstance(this));
+            return (this.singletons[this.name] = getInstance(<any>this));
         }
     }
 
@@ -145,7 +145,7 @@ export class ModuleProxy<T = any> {
      * The module proxy will automatically calculate the route and direct the 
      * traffic to the corresponding remote instance.
      */
-    remote(route: any = ""): FunctionProperties<T> {
+    protected remote(route: any = ""): FunctionProperties<T> {
         let keys = Object.keys(this.remoteSingletons);
         let id = keys[hash(objHash(route)) % keys.length];
         return this.remoteSingletons[id];
