@@ -85,6 +85,9 @@ let ModuleProxy = ModuleProxy_1 = class ModuleProxy {
             if (ext === ".js" || ext === ".ts") {
                 modPath = modPath.slice(0, -3);
             }
+            else if (ext) {
+                return null;
+            }
             return this.root.name + "." + modPath.replace(/\\|\//g, ".");
         }
         else {
