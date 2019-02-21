@@ -55,6 +55,7 @@ declare global {
 }
 
 export interface ModuleLoader {
+    [x: string]: any;
     /**
      * Extension name of the module file, by default, it's `.js` (or `.ts` in 
      * ts-node).
