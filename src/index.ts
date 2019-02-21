@@ -52,7 +52,10 @@ declare global {
 }
 
 export interface ModuleLoader {
-    /** Extension name of the module file, by default, it's `.js`. */
+    /**
+     * Extension name of the module file, by default, it's `.js` (or `.ts` in 
+     * ts-node).
+     */
     extesion: string,
     /** Loads module from the given `path` (`extension` excluded) or cache. */
     load(path: string): any;
@@ -62,7 +65,7 @@ export interface ModuleLoader {
 
 const isTsNode = process.execArgv.join(" ").includes("ts-node");
 const defaultLoader: ModuleLoader = {
-    extesion: ".js",
+    extesion: isTsNode ? ".ts" : ".js",
     load: require,
     remove(path) {
         delete require.cache[path + this.extesion];
@@ -173,9 +176,7 @@ export class ModuleProxy {
             let modPath = path.slice(rootPath.length),
                 ext = extname(modPath);
 
-            if (ext === this.loader.extesion || (
-                this.loader.extesion === ".js" && isTsNode && [".ts", ".tsx"].includes(ext)
-            )) {
+            if (ext === this.loader.extesion) {
                 modPath = modPath.slice(0, -this.loader.extesion.length);
             } else if (ext) {
                 return;

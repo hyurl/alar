@@ -14,7 +14,7 @@ exports.RpcChannel = rpc_1.RpcChannel;
 const util_1 = require("./util");
 const isTsNode = process.execArgv.join(" ").includes("ts-node");
 const defaultLoader = {
-    extesion: ".js",
+    extesion: isTsNode ? ".ts" : ".js",
     load: require,
     remove(path) {
         delete require.cache[path + this.extesion];
@@ -97,7 +97,7 @@ let ModuleProxy = ModuleProxy_1 = class ModuleProxy {
         let rootPath = this.root.path + path_1.sep;
         if (startsWith(path, rootPath)) {
             let modPath = path.slice(rootPath.length), ext = path_1.extname(modPath);
-            if (ext === this.loader.extesion || (this.loader.extesion === ".js" && isTsNode && [".ts", ".tsx"].includes(ext))) {
+            if (ext === this.loader.extesion) {
                 modPath = modPath.slice(0, -this.loader.extesion.length);
             }
             else if (ext) {

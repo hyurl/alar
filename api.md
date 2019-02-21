@@ -97,7 +97,8 @@ By default, Alar supports JavaScript modules and (TypeScript modules in
 **ts-node**), By setting a custom loader, a ModuleProxy instance can resolve any
 kind of module wanted.
 
-- `extesion` Extension name of the module file, by default, it's `.js`.
+- `extesion` Extension name of the module file, by default, it's `.js` (or `.ts`
+    in ts-node).
 - `load(path: string): any` Loads module from the given `path` (`extension` 
     excluded) or cache.
 - `remove(path: string): void` Removes module from cache when watcher is running.
