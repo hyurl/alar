@@ -16,7 +16,7 @@ const isTsNode = process.execArgv.join(" ").includes("ts-node");
 const defaultLoader = {
     extesion: isTsNode ? ".ts" : ".js",
     load: require,
-    remove(path) {
+    unload(path) {
         delete require.cache[path + this.extesion];
     }
 };
@@ -115,7 +115,7 @@ let ModuleProxy = ModuleProxy_1 = class ModuleProxy {
             let name = this.resolve(filename);
             if (name) {
                 delete this.singletons[name];
-                this.loader.remove(filename.slice(0, -this.loader.extesion.length));
+                this.loader.unload(filename.slice(0, -this.loader.extesion.length));
                 cb && cb(event, filename);
             }
         };

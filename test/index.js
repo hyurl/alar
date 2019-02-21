@@ -165,7 +165,7 @@ describe("Alar ModuleProxy", () => {
                     cache[path] = JSON.parse(fs.readFileSync(path + this.extesion, "utf8"))
                 );
             },
-            remove(path) {
+            unload(path) {
                 cache[path] && (delete cache[path]);
             }
         });

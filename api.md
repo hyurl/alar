@@ -89,19 +89,20 @@ following extra properties and methods:
 export interface ModuleLoader {
     extesion: string,
     load(path: string): any;
-    remove(path: string): void;
+    unload(path: string): void;
 }
 ```
 
 By default, Alar supports JavaScript modules and (TypeScript modules in 
 **ts-node**), By setting a custom loader, a ModuleProxy instance can resolve any
-kind of module wanted.
+kind of module wanted. NOTE: The loader must provide cache support.
 
 - `extesion` Extension name of the module file, by default, it's `.js` (or `.ts`
     in ts-node).
 - `load(path: string): any` Loads module from the given `path` (`extension` 
     excluded) or cache.
-- `remove(path: string): void` Removes module from cache when watcher is running.
+- `unload(path: string): void` Unloads the module in cache if the file of given
+    `path` (`extension` excluded) is modified.
 
 ```typescript
 // Add a loader to resolve JSON modules.
@@ -115,7 +116,7 @@ json.setLoader({
             cache[path] = JSON.parse(fs.readFileSync(path + this.extesion, "utf8"))
         );
     },
-    remove(path) {
+    unload(path) {
         cache[path] && (delete cache[path]);
     }
 });
