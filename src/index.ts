@@ -61,21 +61,18 @@ export interface ModuleLoader {
      * ts-node).
      */
     extesion: string,
-    /** Loads module from the given `path` (`extension` excluded) or cache. */
-    load(path: string): any;
-    /**
-     * Unloads the module in cache if the file of given `path` (`extension` 
-     * excluded) is modified.
-     */
-    unload(path: string): void;
+    /** Loads module from the given file or cache. */
+    load(filename: string): any;
+    /** Unloads the module in cache if the file is modified. */
+    unload(filename: string): void;
 }
 
 const isTsNode = process.execArgv.join(" ").includes("ts-node");
 const defaultLoader: ModuleLoader = {
     extesion: isTsNode ? ".ts" : ".js",
     load: require,
-    unload(path) {
-        delete require.cache[path + this.extesion];
+    unload(filename) {
+        delete require.cache[filename];
     }
 }
 
@@ -89,7 +86,7 @@ export class ModuleProxy<T = any> {
     constructor(readonly name: string, readonly path: string, ) { }
 
     protected get exports(): any {
-        return this.loader.load(this.path);
+        return this.loader.load(this.path + this.loader.extesion);
     }
 
     protected get proto(): T {
@@ -190,7 +187,7 @@ export class ModuleProxy<T = any> {
 
             if (name) {
                 delete this.singletons[name];
-                this.loader.unload(filename.slice(0, -this.loader.extesion.length));
+                this.loader.unload(filename);
                 cb && cb(event, filename);
             }
         };

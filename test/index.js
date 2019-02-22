@@ -160,13 +160,13 @@ describe("Alar ModuleProxy", () => {
         var cache = {};
         json.setLoader({
             extesion: ".json",
-            load(path) {
-                return cache[path] || (
-                    cache[path] = JSON.parse(fs.readFileSync(path + this.extesion, "utf8"))
+            load(filename) {
+                return cache[filename] || (
+                    cache[filename] = JSON.parse(fs.readFileSync(filename, "utf8"))
                 );
             },
-            unload(path) {
-                cache[path] && (delete cache[path]);
+            unload(filename) {
+                cache[filename] && (delete cache[filename]);
             }
         });
 

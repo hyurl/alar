@@ -99,10 +99,9 @@ kind of module wanted. NOTE: The loader must provide cache support.
 
 - `extesion` Extension name of the module file, by default, it's `.js` (or `.ts`
     in ts-node).
-- `load(path: string): any` Loads module from the given `path` (`extension` 
-    excluded) or cache.
-- `unload(path: string): void` Unloads the module in cache if the file of given
-    `path` (`extension` excluded) is modified.
+- `load(filename: string): any` Loads module from the given file or cache.
+- `unload(filename: string): void` Unloads the module in cache if the file is 
+    modified.
 
 ```typescript
 // Add a loader to resolve JSON modules.
