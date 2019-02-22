@@ -23,11 +23,11 @@ const defaultLoader = {
 let ModuleProxy = ModuleProxy_1 = class ModuleProxy {
     constructor(name, path) {
         this.name = name;
-        this.path = path;
         this.loader = defaultLoader;
         this.singletons = {};
         this.remoteSingletons = {};
         this.children = {};
+        this.path = path_1.normalize(path);
     }
     get exports() {
         return this.loader.load(this.path + this.loader.extesion);

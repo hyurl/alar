@@ -1,4 +1,4 @@
-import { extname, sep } from "path";
+import { extname, sep, normalize } from "path";
 import { applyMagic } from "js-magic";
 import { watch, FSWatcher } from "chokidar";
 import hash = require("string-hash");
@@ -78,12 +78,15 @@ const defaultLoader: ModuleLoader = {
 
 @applyMagic
 export class ModuleProxy<T = any> {
+    readonly path: string;
     private loader: ModuleLoader = defaultLoader;
     private singletons: { [name: string]: T } = {};
     private remoteSingletons: { [dsn: string]: FunctionProperties<T> } = {};
     private children: { [name: string]: ModuleProxy } = {};
 
-    constructor(readonly name: string, readonly path: string, ) { }
+    constructor(readonly name: string, path: string) {
+        this.path = normalize(path);
+    }
 
     protected get exports(): any {
         return this.loader.load(this.path + this.loader.extesion);
