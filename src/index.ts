@@ -148,8 +148,14 @@ export class ModuleProxy<T = any> {
      */
     protected remote(route: any = ""): FunctionProperties<T> {
         let keys = Object.keys(this.remoteSingletons);
-        let id = keys[hash(objHash(route)) % keys.length];
-        return this.remoteSingletons[id];
+
+        if (keys.length) {
+            let id = keys[hash(objHash(route)) % keys.length];
+            return this.remoteSingletons[id];
+        } else {
+            // If no remote instance is connected, calls the local one instead.
+            return this.instance();
+        }
     }
 
     /** Serves an RPC service according to the given configuration. */

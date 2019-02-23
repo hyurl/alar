@@ -25,15 +25,20 @@ function set(target, prop, value, writable = false) {
     });
 }
 exports.set = set;
-function getInstance(mod) {
+function getInstance(mod, instantiate = true) {
     let ins;
     let { ctor } = mod;
     if (ctor) {
-        if (typeof ctor.getInstance === "function") {
-            ins = ctor.getInstance();
+        if (instantiate) {
+            if (typeof ctor.getInstance === "function") {
+                ins = ctor.getInstance();
+            }
+            else {
+                ins = mod.create();
+            }
         }
         else {
-            ins = mod.create();
+            ins = Object.create(ctor.prototype);
         }
     }
     else {

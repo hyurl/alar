@@ -115,6 +115,25 @@ describe("Alar ModuleProxy", () => {
     //     });
     // });
 
+    it("should use a custom loader to load JSON module as expected", () => {
+        var json = new alar.ModuleProxy("json", __dirname + "/json");
+        var cache = {};
+        json.setLoader({
+            extesion: ".json",
+            load(filename) {
+                return cache[filename] || (
+                    cache[filename] = JSON.parse(fs.readFileSync(filename, "utf8"))
+                );
+            },
+            unload(filename) {
+                cache[filename] && (delete cache[filename]);
+            }
+        });
+
+        assert.deepStrictEqual(json.test.instance(), { name: "JSON", version: "1.0.0" });
+        assert.strictEqual(Object.getPrototypeOf(json.test.create()), json.test.instance());
+    });
+
     it("should serve an IPC service as expected", (done) => {
         awaiter(null, null, null, function* () {
             var sockPath = process.cwd() + "/alar.sock";
@@ -155,22 +174,26 @@ describe("Alar ModuleProxy", () => {
         });
     });
 
-    it("should use a custom loader to load JSON module as expected", () => {
-        var json = new alar.ModuleProxy("json", __dirname + "/json");
-        var cache = {};
-        json.setLoader({
-            extesion: ".json",
-            load(filename) {
-                return cache[filename] || (
-                    cache[filename] = JSON.parse(fs.readFileSync(filename, "utf8"))
-                );
-            },
-            unload(filename) {
-                cache[filename] && (delete cache[filename]);
-            }
-        });
+    it("should connect the RPC service before serving it", (done) => {
+        awaiter(null, null, null, function* () {
+            var config = { host: "127.0.0.1", port: 18888, timeout: 100, defer: true };
+            var client = yield app.connect(config);
+            var server = yield app.serve(config);
 
-        assert.deepStrictEqual(json.test.instance(), { name: "JSON", version: "1.0.0" });
-        assert.strictEqual(Object.getPrototypeOf(json.test.create()), json.test.instance());
+            server.register(app.service.user);
+            client.register(app.service.user);
+
+            app.service.user.instance(app.service.user.create("Mr. World"));
+
+            while (!client.connected) {
+                yield sleep(100);
+            }
+
+            assert.strictEqual(yield app.service.user.remote().getName(), "Mr. World");
+
+            yield client.close();
+            yield server.close();
+            done();
+        });
     });
 });

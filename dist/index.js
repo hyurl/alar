@@ -78,8 +78,13 @@ let ModuleProxy = ModuleProxy_1 = class ModuleProxy {
     }
     remote(route = "") {
         let keys = Object.keys(this.remoteSingletons);
-        let id = keys[hash(objHash(route)) % keys.length];
-        return this.remoteSingletons[id];
+        if (keys.length) {
+            let id = keys[hash(objHash(route)) % keys.length];
+            return this.remoteSingletons[id];
+        }
+        else {
+            return this.instance();
+        }
     }
     serve(config) {
         return new rpc_1.RpcServer(config).open();

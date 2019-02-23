@@ -29,15 +29,20 @@ export function set(target, prop, value, writable = false) {
     });
 }
 
-export function getInstance<T>(mod: ModuleProxy<T>): T {
+export function getInstance<T>(mod: ModuleProxy<T>, instantiate = true): T {
     let ins: T;
     let { ctor } = mod;
 
     if (ctor) {
-        if (typeof ctor.getInstance === "function") {
-            ins = ctor.getInstance();
+        if (instantiate) {
+            if (typeof ctor.getInstance === "function") {
+                ins = ctor.getInstance();
+            } else {
+                ins = mod.create();
+            }
         } else {
-            ins = mod.create();
+            // Create instance without instantiating, used for remote instance.
+            ins = Object.create(ctor.prototype);
         }
     } else {
         ins = <any>mod.proto;
