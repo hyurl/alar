@@ -319,15 +319,12 @@ export class RpcClient extends RpcChannel {
         for (let name in this.registry) {
             let instances = this.registry[name]["remoteSingletons"];
 
-            // Remove the remote instance from the module proxy, but keep at 
-            // least one instance alive if the channel is not closed. For 
-            // removed instance, the traffic will be redirected to other alive 
-            // services, if the final service is also dead, RPC calling should 
-            // just throw timeout errors.
-            if (this.closed || Object.keys(instances).length > 1) {
-                delete instances[dsn];
-                success = true;
-            }
+            // Remove the remote instance from the module proxy, for removed 
+            // instance, the traffic will be redirected to other alive services,
+            // if all the services are dead, RPC calling should just fail with 
+            // errors.
+            delete instances[dsn];
+            success = true;
         }
 
         return success;

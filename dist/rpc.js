@@ -231,10 +231,8 @@ class RpcClient extends RpcChannel {
         let success = false;
         for (let name in this.registry) {
             let instances = this.registry[name]["remoteSingletons"];
-            if (this.closed || Object.keys(instances).length > 1) {
-                delete instances[dsn];
-                success = true;
-            }
+            delete instances[dsn];
+            success = true;
         }
         return success;
     }
