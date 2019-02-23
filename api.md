@@ -129,7 +129,6 @@ interface RpcOptions {
     port?: number;
     path?: string;
     timeout?: number;
-    defer?: number;
 }
 ```
 
@@ -139,17 +138,10 @@ channel. Otherwise, the RPC channel will be bound a network channel according to
 the `host` and `port`. By default `timeout` is set `5000`ms, works both in 
 connection and IPC requests.
 
-The RPC channel could be established in the future, when `defer` is `true`, the
-`connect()` method will return immediately when the server is not available,
-the client will try to connect it in the background automatically.
-
-The channel provides internal support for re-connection as well, if a remote 
-service is disconnected e.g. the server shutdown (even manually), the traffic 
+The channel provides internal support for re-connection, if a remote service is 
+disconnected e.g. the server shutdown (even manually), the traffic 
 will be redirected to other online services, and the client will try to 
 reconnect repeatedly in the background (according to `timeout`).
-
-When no remote service is connected, the `remote()` method will return the local
-instance instead, so that to keep the service always available.
 
 # RpcChannel
 
@@ -172,3 +164,23 @@ The following properties and methods work in both implementations:
 - `onError(handler: (err: Error) => void)` Binds an error handler invoked 
     whenever an error occurred in asynchronous operations which can't be caught
     during run-time.
+
+## RpcServer
+
+```typescript
+class RpcServer extends RpcChannel { }
+```
+
+The server implementation of the RPC channel.
+
+## RpcClient
+
+```typescript
+class RpcClient extends RpcChannel {
+    connecting: boolean;
+    connected: boolean;
+    closed: boolean;
+}
+```
+
+The client implementation of the RPC channel.

@@ -3,6 +3,10 @@ exports.default = class User {
         this.name = name;
     }
 
+    setName(name) {
+        this.name = name;
+    }
+
     getName() {
         return this.name;
     }

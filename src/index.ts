@@ -159,12 +159,12 @@ export class ModuleProxy<T = any> {
     }
 
     /** Serves an RPC service according to the given configuration. */
-    serve(config: string | RpcOptions): Promise<RpcChannel> {
+    serve(config: string | RpcOptions): Promise<RpcServer> {
         return new RpcServer(<any>config).open();
     }
 
     /** Connects an RPC service according to the given configuration. */
-    connect(config: string | RpcOptions): Promise<RpcChannel> {
+    connect(config: string | RpcOptions): Promise<RpcClient> {
         return new RpcClient(<any>config).open();
     }
 

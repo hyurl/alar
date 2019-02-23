@@ -9,6 +9,20 @@ const sleep = require("sleep-promise");
 const awaiter = require("tslib").__awaiter;
 const Bootstrap = require("./app/bootstrap").default;
 const User = require("./app/service/user").default;
+const config = require("./app/config").default;
+const ChildProcess = require("child_process");
+
+function fork(filename) {
+    return new Promise((resolve, reject) => {
+        var proc = ChildProcess.fork(filename);
+
+        proc.on("error", reject).on("message", msg => {
+            if (msg === "ready") {
+                resolve(proc);
+            }
+        });
+    });
+}
 
 describe("Alar ModuleProxy", () => {
     it("should create a root module proxy instance as expected", () => {
@@ -71,21 +85,17 @@ describe("Alar ModuleProxy", () => {
     it("should access to a prototype module as expected", () => {
         assert.strictEqual(app.config.name, "app.config");
         assert.strictEqual(app.config.path, path.normalize(__dirname + "/app/config"));
-        assert.deepStrictEqual(app.config.proto, require(__dirname + "/app/config").default);
+        assert.deepStrictEqual(app.config.proto, config);
     });
 
     it("should create instance from a prototype module as expected", () => {
         let ins = app.config.create();
-        let mod = require(__dirname + "/app/config").default;
-        assert.strictEqual(Object.getPrototypeOf(ins), mod);
-        assert.strictEqual(ins.name, mod.name);
-        assert.strictEqual(ins.version, mod.version);
+        assert.strictEqual(Object.getPrototypeOf(ins), config);
     });
 
     it("should use the prototype module as singleton as expected", () => {
         let ins = app.config.instance();
-        let mod = require(__dirname + "/app/config").default;
-        assert.strictEqual(ins, mod);
+        assert.strictEqual(ins, config);
     });
 
     // it("should watch file change and reload module as expected", (done) => {
@@ -156,7 +166,6 @@ describe("Alar ModuleProxy", () => {
 
     it("should serve an RPC service as expected", (done) => {
         awaiter(null, null, null, function* () {
-            var config = { host: "127.0.0.1", port: 18888 };
             var server = yield app.serve(config);
 
             server.register(app.service.user);
@@ -174,25 +183,27 @@ describe("Alar ModuleProxy", () => {
         });
     });
 
-    it("should connect the RPC service before serving it", (done) => {
+    it("should reconnect the RPC service after disconnect automatically", (done) => {
         awaiter(null, null, null, function* () {
-            var config = { host: "127.0.0.1", port: 18888, timeout: 100, defer: true };
+            var filename = __dirname + "/server/index.js";
+            var proc = yield fork(filename);
             var client = yield app.connect(config);
-            var server = yield app.serve(config);
 
-            server.register(app.service.user);
             client.register(app.service.user);
 
-            app.service.user.instance(app.service.user.create("Mr. World"));
+            // kill the server and restart it, the client will reconnect in the
+            // background automatically.
+            proc.kill();
+            proc = yield fork(filename);
 
             while (!client.connected) {
                 yield sleep(100);
             }
 
-            assert.strictEqual(yield app.service.user.remote().getName(), "Mr. World");
+            assert.strictEqual(yield app.service.user.remote().getName(), "Mr. Handsome");
 
             yield client.close();
-            yield server.close();
+            proc.kill();
             done();
         });
     });

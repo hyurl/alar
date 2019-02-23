@@ -20,7 +20,6 @@ class RpcChannel {
         this.port = 9000;
         this.path = "";
         this.timeout = 5000;
-        this.defer = false;
         if (typeof options === "object") {
             Object.assign(this, options);
         }
@@ -79,13 +78,13 @@ class RpcServer extends RpcChannel {
                     this.errorHandler.call(this, err);
                 }
             }).on("connection", socket => {
-                let remains = [];
+                let temp = [];
                 socket.on("error", err => {
                     if (!isSocketResetError(err) && this.errorHandler) {
                         this.errorHandler(err);
                     }
                 }).on("data", (buf) => tslib_1.__awaiter(this, void 0, void 0, function* () {
-                    let msg = bsp_1.receive(buf, remains);
+                    let msg = bsp_1.receive(buf, temp);
                     for (let [event, taskId, name, method, ...args] of msg) {
                         if (event === RpcEvents.REQUEST) {
                             let event, data;
@@ -125,31 +124,39 @@ exports.RpcServer = RpcServer;
 class RpcClient extends RpcChannel {
     constructor() {
         super(...arguments);
-        this.initiated = false;
         this.connecting = false;
         this.connected = false;
         this.closed = false;
-        this.queue = [];
-        this.remains = [];
-        this.taskId = 0;
+        this.initiated = false;
         this.registry = {};
+        this.queue = [];
+        this.temp = [];
+        this.taskId = 0;
         this.tasks = {};
     }
     init() {
         this.socket = new net.Socket();
         this.socket.on("error", err => {
-            if (this.connected && isSocketResetError(err)) {
+            if (err["code"] === "EALREADY") {
+                return;
+            }
+            else if (this.connected && isSocketResetError(err)) {
                 this.socket.emit("close", !!err);
             }
             else if (this.connected && this.errorHandler) {
                 this.errorHandler(err);
             }
+        }).on("end", () => {
+            !this.connecting && this.socket.emit("close", false);
         }).on("close", () => {
             this.connected = false;
             this.stop();
-            this.closed || this.reconnect(this.timeout);
+            if (!this.closed && !this.connecting) {
+                this.connecting = true;
+                this.reconnect(this.timeout);
+            }
         }).on("data", buf => {
-            let msg = bsp_1.receive(buf, this.remains);
+            let msg = bsp_1.receive(buf, this.temp);
             for (let [event, taskId, data] of msg) {
                 let task = this.tasks[taskId];
                 if (task) {
@@ -196,7 +203,7 @@ class RpcClient extends RpcChannel {
                         listener();
                         this.continue();
                     }
-                    else if (this.defer || this.initiated) {
+                    else if (this.initiated) {
                         this.initiated = true;
                         this.socket.emit("close", !!err);
                         resolve(this);
@@ -216,7 +223,8 @@ class RpcClient extends RpcChannel {
             this.stop();
             if (this.socket) {
                 this.socket.unref();
-                this.socket.end("", () => resolve(this));
+                this.socket.end();
+                resolve(this);
             }
             else {
                 resolve(this);
@@ -242,12 +250,19 @@ class RpcClient extends RpcChannel {
     stop() {
         let { dsn } = this;
         for (let name in this.registry) {
-            delete this.registry[name]["remoteSingletons"][dsn];
+            let instances = this.registry[name]["remoteSingletons"];
+            if (Object.keys(instances).length > 1) {
+                delete instances[dsn];
+            }
         }
     }
     continue() {
+        let { dsn } = this;
         for (let name in this.registry) {
-            this.register(this.registry[name]);
+            let instances = this.registry[name]["remoteSingletons"];
+            if (!instances[dsn]) {
+                this.register(this.registry[name]);
+            }
         }
     }
     reconnect(timeout = 0) {
@@ -303,6 +318,7 @@ class RpcClient extends RpcChannel {
             return new Promise((resolve, reject) => tslib_1.__awaiter(this, void 0, void 0, function* () {
                 let taskId = self.createTask(resolve, reject);
                 if (!self.connecting && !self.connected && !self.closed) {
+                    self.connecting = true;
                     yield self.reconnect();
                 }
                 self.send(RpcEvents.REQUEST, taskId, name, method, ...args);

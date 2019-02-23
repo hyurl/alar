@@ -24,8 +24,6 @@ export interface RpcOptions {
     port?: number;
     path?: string;
     timeout?: number;
-    /** Defers connect if the server is not available right now. */
-    defer?: boolean;
 }
 
 /** An RPC channel that allows modules to communicate remotely. */
@@ -34,7 +32,6 @@ export abstract class RpcChannel implements RpcOptions {
     port = 9000;
     path = "";
     timeout = 5000;
-    defer = false;
     protected errorHandler: (err: Error) => void;
 
     constructor(path: string);
@@ -120,7 +117,7 @@ export class RpcServer extends RpcChannel {
                     this.errorHandler.call(this, err);
                 }
             }).on("connection", socket => {
-                let remains: Buffer[] = [];
+                let temp: Buffer[] = [];
 
                 socket.on("error", err => {
                     // When any error occurs, if it's a socket reset error, e.g.
@@ -131,7 +128,7 @@ export class RpcServer extends RpcChannel {
                         this.errorHandler(err);
                     }
                 }).on("data", async (buf) => {
-                    let msg = receive<Request>(buf, remains);
+                    let msg = receive<Request>(buf, temp);
 
                     for (let [event, taskId, name, method, ...args] of msg) {
                         if (event === RpcEvents.REQUEST) {
@@ -175,27 +172,33 @@ export class RpcServer extends RpcChannel {
 }
 
 export class RpcClient extends RpcChannel {
+    connecting = false;
+    connected = false;
+    closed = false;
     private socket: net.Socket;
     private initiated = false;
-    private connecting = false;
-    private connected = false;
-    private closed = false;
-    private queue: any[][] = [];
-    private remains: any[] = [];
-    private taskId: number = 0;
     private registry: { [name: string]: ModuleProxy<any> } = {};
+    private queue: any[][] = [];
+    private temp: any[] = [];
+    private taskId: number = 0;
     private tasks: { [taskId: number]: Task; } = {};
 
     private init() {
         this.socket = new net.Socket();
         this.socket.on("error", err => {
-            if (this.connected && isSocketResetError(err)) {
+            if (err["code"] === "EALREADY") {
+                return;
+            } else if (this.connected && isSocketResetError(err)) {
                 // If the socket is reset, emit close event so that the 
                 // channel could try to reconnect it automatically.
                 this.socket.emit("close", !!err);
             } else if (this.connected && this.errorHandler) {
                 this.errorHandler(err);
             }
+        }).on("end", () => {
+            // Emit close event so that the client can try reconnect in the 
+            // background.
+            !this.connecting && this.socket.emit("close", false);
         }).on("close", () => {
             // If the socket is closed or reset, stop the service 
             // immediately and try to reconnect if the channel is not closed.
@@ -203,9 +206,13 @@ export class RpcClient extends RpcChannel {
             // forever, so that it can discover service automatically.
             this.connected = false;
             this.stop();
-            this.closed || this.reconnect(this.timeout);
+
+            if (!this.closed && !this.connecting) {
+                this.connecting = true;
+                this.reconnect(this.timeout);
+            }
         }).on("data", buf => {
-            let msg = receive<Response>(buf, this.remains);
+            let msg = receive<Response>(buf, this.temp);
 
             for (let [event, taskId, data] of msg) {
                 let task = this.tasks[taskId];
@@ -262,7 +269,7 @@ export class RpcClient extends RpcChannel {
                     if (err["code"] === "EALREADY") {
                         listener();
                         this.continue();
-                    } else if (this.defer || this.initiated) {
+                    } else if (this.initiated) {
                         // If `defer` is enabled, when connection failed, 
                         // the channel will resolve immediately without error,
                         // and emit close event so that the channel could try to 
@@ -287,7 +294,8 @@ export class RpcClient extends RpcChannel {
 
             if (this.socket) {
                 this.socket.unref();
-                this.socket.end("", () => resolve(this));
+                this.socket.end();
+                resolve(this);
             } else {
                 resolve(this);
             }
@@ -322,13 +330,27 @@ export class RpcClient extends RpcChannel {
         let { dsn } = this;
 
         for (let name in this.registry) {
-            delete this.registry[name]["remoteSingletons"][dsn];
+            let instances = this.registry[name]["remoteSingletons"];
+
+            // Remove the remote instance from the module proxy, but keep at 
+            // least one instance alive. For removed instance, the traffic will 
+            // be redirected to other alive services, if the final service 
+            // is also dead, RPC calling should just throw timeout errors.
+            if (Object.keys(instances).length > 1) {
+                delete instances[dsn];
+            }
         }
     }
 
     private continue() {
+        let { dsn } = this;
+
         for (let name in this.registry) {
-            this.register(this.registry[name]);
+            let instances = this.registry[name]["remoteSingletons"];
+
+            if (!instances[dsn]) {
+                this.register(this.registry[name]);
+            }
         }
     }
 
@@ -395,6 +417,7 @@ export class RpcClient extends RpcChannel {
                 let taskId = self.createTask(resolve, reject);
 
                 if (!self.connecting && !self.connected && !self.closed) {
+                    self.connecting = true;
                     await self.reconnect();
                 }
 
