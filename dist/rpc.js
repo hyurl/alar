@@ -129,7 +129,6 @@ class RpcClient extends RpcChannel {
         this.closed = false;
         this.initiated = false;
         this.registry = {};
-        this.queue = [];
         this.temp = [];
         this.taskId = 0;
         this.tasks = {};
@@ -137,23 +136,21 @@ class RpcClient extends RpcChannel {
     init() {
         this.socket = new net.Socket();
         this.socket.on("error", err => {
-            if (err["code"] === "EALREADY") {
-                return;
-            }
-            else if (this.connected && isSocketResetError(err)) {
+            if (this.connected && isSocketResetError(err)) {
                 this.socket.emit("close", !!err);
             }
             else if (this.connected && this.errorHandler) {
                 this.errorHandler(err);
             }
         }).on("end", () => {
-            !this.connecting && this.socket.emit("close", false);
-        }).on("close", () => {
+            if (!this.connecting && this.socket.destroyed) {
+                this.socket.emit("close", false);
+            }
+        }).on("close", hadError => {
             this.connected = false;
             this.pause();
             if (!this.closed && !this.connecting) {
-                this.connecting = true;
-                this.reconnect(this.timeout);
+                this.reconnect(hadError ? this.timeout : 0);
             }
         }).on("data", buf => {
             let msg = bsp_1.receive(buf, this.temp);
@@ -171,48 +168,39 @@ class RpcClient extends RpcChannel {
         });
     }
     open() {
-        this.connecting = true;
         return new Promise((resolve, reject) => {
-            if (this.closed)
-                return resolve(this);
-            if (this.socket) {
-                this.socket.removeAllListeners("connect");
-            }
-            else {
+            if (!this.socket) {
                 this.init();
             }
+            else if (this.socket.connecting || this.connected || this.closed) {
+                return resolve(this);
+            }
+            this.connecting = true;
             let listener = () => {
                 this.initiated = true;
-                this.connected = true;
+                this.connected = !this.socket.destroyed;
                 this.connecting = false;
+                this.socket.removeListener("error", errorListener);
                 resolve(this);
-                while (this.queue.length) {
-                    this.send(...this.queue.shift());
+            };
+            let errorListener = (err) => {
+                this.connecting = false;
+                this.socket.removeListener("connect", listener);
+                if (this.initiated) {
+                    this.socket.emit("close", !!err);
+                    resolve(this);
+                }
+                else {
+                    reject(err);
                 }
             };
             if (this.path) {
-                this.socket.connect(util_1.absPath(this.path, true), listener);
+                this.socket.connect(util_1.absPath(this.path, true));
             }
             else {
-                this.socket.connect(this.port, this.host, listener);
+                this.socket.connect(this.port, this.host);
             }
-            this.socket.once("error", err => {
-                if (this.connecting) {
-                    this.connecting = false;
-                    if (err["code"] === "EALREADY") {
-                        listener();
-                        this.resume();
-                    }
-                    else if (this.initiated) {
-                        this.initiated = true;
-                        this.socket.emit("close", !!err);
-                        resolve(this);
-                    }
-                    else {
-                        reject(err);
-                    }
-                }
-            });
+            this.socket.once("connect", listener).once("error", errorListener);
         });
     }
     close() {
@@ -264,9 +252,10 @@ class RpcClient extends RpcChannel {
     }
     reconnect(timeout = 0) {
         return tslib_1.__awaiter(this, void 0, void 0, function* () {
-            if (this.connected)
+            if (this.connected || this.connecting)
                 return;
             try {
+                this.connecting = true;
                 timeout && (yield sleep(timeout));
                 yield this.open();
             }
@@ -280,9 +269,6 @@ class RpcClient extends RpcChannel {
         if (this.socket && !this.socket.destroyed) {
             this.socket.write(bsp_1.send(...data));
         }
-        else {
-            this.queue.push(data);
-        }
     }
     getTaskId() {
         let taskId = this.taskId++;
@@ -293,8 +279,10 @@ class RpcClient extends RpcChannel {
     createTask(resolve, reject) {
         let taskId = this.getTaskId();
         let timer = setTimeout(() => {
-            let num = Math.round(this.timeout / 1000), unit = num === 1 ? "second" : "seconds";
-            this.tasks[taskId].reject(new Error(`RPC request timeout after ${num} ${unit}`));
+            let task = this.tasks[taskId];
+            let num = Math.round(this.timeout / 1000);
+            let unit = num === 1 ? "second" : "seconds";
+            task.reject(new Error(`RPC request timeout after ${num} ${unit}`));
         }, this.timeout);
         let clean = () => {
             clearTimeout(timer);
@@ -313,10 +301,6 @@ class RpcClient extends RpcChannel {
         let fn = function (...args) {
             return new Promise((resolve, reject) => tslib_1.__awaiter(this, void 0, void 0, function* () {
                 let taskId = self.createTask(resolve, reject);
-                if (!self.connecting && !self.connected && !self.closed) {
-                    self.connecting = true;
-                    yield self.reconnect();
-                }
                 self.send(RpcEvents.REQUEST, taskId, name, method, ...args);
             }));
         };

@@ -186,7 +186,6 @@ export class RpcClient extends RpcChannel {
     private socket: net.Socket;
     private initiated = false;
     private registry: { [name: string]: ModuleProxy<any> } = {};
-    private queue: any[][] = [];
     private temp: any[] = [];
     private taskId: number = 0;
     private tasks: { [taskId: number]: Task; } = {};
@@ -194,9 +193,7 @@ export class RpcClient extends RpcChannel {
     private init() {
         this.socket = new net.Socket();
         this.socket.on("error", err => {
-            if (err["code"] === "EALREADY") {
-                return;
-            } else if (this.connected && isSocketResetError(err)) {
+            if (this.connected && isSocketResetError(err)) {
                 // If the socket is reset, emit close event so that the 
                 // channel could try to reconnect it automatically.
                 this.socket.emit("close", !!err);
@@ -206,16 +203,17 @@ export class RpcClient extends RpcChannel {
         }).on("end", () => {
             // Emit close event so that the client can try reconnect in the 
             // background.
-            !this.connecting && this.socket.emit("close", false);
-        }).on("close", () => {
+            if (!this.connecting && this.socket.destroyed) {
+                this.socket.emit("close", false);
+            }
+        }).on("close", hadError => {
             // If the socket is closed or reset, pause the service immediately 
             // and try to reconnect if the channel is not closed.
             this.connected = false;
             this.pause();
 
             if (!this.closed && !this.connecting) {
-                this.connecting = true;
-                this.reconnect(this.timeout);
+                this.reconnect(hadError ? this.timeout : 0);
             }
         }).on("data", buf => {
             let msg = receive<Response>(buf, this.temp);
@@ -238,57 +236,48 @@ export class RpcClient extends RpcChannel {
     }
 
     open(): Promise<this> {
-        this.connecting = true;
         return new Promise((resolve, reject) => {
-            if (this.closed) return resolve(this);
-
-            if (this.socket) {
-                this.socket.removeAllListeners("connect");
-            } else {
+            if (!this.socket) {
                 this.init();
+            } else if (this.socket.connecting || this.connected || this.closed) {
+                return resolve(this);
             }
+
+            this.connecting = true;
 
             let listener = () => {
                 this.initiated = true;
-                this.connected = true;
+                this.connected = !this.socket.destroyed;
                 this.connecting = false;
+                this.socket.removeListener("error", errorListener);
                 resolve(this);
+            };
+            let errorListener = (err: Error) => {
+                this.connecting = false;
+                this.socket.removeListener("connect", listener);
 
-                // If there are queued data, send them immediately after connect.
-                while (this.queue.length) {
-                    this.send(...this.queue.shift());
+                // An EALREADY error may happen if background re-connections
+                // got conflicted and one of the them finishes connect 
+                // before others.
+                if (this.initiated) {
+                    // If `defer` is enabled, when connection failed, 
+                    // the channel will resolve immediately without error,
+                    // and emit close event so that the channel could try to 
+                    // reconnect it automatically.
+                    this.socket.emit("close", !!err);
+                    resolve(this);
+                } else {
+                    reject(err);
                 }
             };
 
             if (this.path) { // connect IPC (Unix domain socket or Windows named pipe)
-                this.socket.connect(absPath(this.path, true), listener);
+                this.socket.connect(absPath(this.path, true));
             } else { // connect RPC
-                this.socket.connect(this.port, this.host, listener);
+                this.socket.connect(this.port, this.host);
             }
 
-            this.socket.once("error", err => {
-                if (this.connecting) {
-                    this.connecting = false;
-
-                    // An EALREADY error may happen if background re-connections
-                    // got conflicted and one of the them finishes connect 
-                    // before others.
-                    if (err["code"] === "EALREADY") {
-                        listener();
-                        this.resume();
-                    } else if (this.initiated) {
-                        // If `defer` is enabled, when connection failed, 
-                        // the channel will resolve immediately without error,
-                        // and emit close event so that the channel could try to 
-                        // reconnect it automatically.
-                        this.initiated = true;
-                        this.socket.emit("close", !!err);
-                        resolve(this);
-                    } else {
-                        reject(err);
-                    }
-                }
-            });
+            this.socket.once("connect", listener).once("error", errorListener);
         });
     }
 
@@ -362,9 +351,10 @@ export class RpcClient extends RpcChannel {
     }
 
     private async reconnect(timeout = 0) {
-        if (this.connected) return;
+        if (this.connected || this.connecting) return;
 
         try {
+            this.connecting = true;
             timeout && (await sleep(timeout));
             await this.open();
         } catch (e) { }
@@ -374,12 +364,9 @@ export class RpcClient extends RpcChannel {
         }
     }
 
-    private send(...data: any[]) {
+    private send(...data: Request) {
         if (this.socket && !this.socket.destroyed) {
             this.socket.write(send(...data));
-        } else {
-            // If no connection available, push the message to the queue.
-            this.queue.push(data);
         }
     }
 
@@ -395,10 +382,11 @@ export class RpcClient extends RpcChannel {
     private createTask(resolve: Function, reject: Function): number {
         let taskId = this.getTaskId();
         let timer = setTimeout(() => { // Set a timer to reject when timeout.
-            let num = Math.round(this.timeout / 1000),
-                unit = num === 1 ? "second" : "seconds";
+            let task = this.tasks[taskId];
+            let num = Math.round(this.timeout / 1000);
+            let unit = num === 1 ? "second" : "seconds";
 
-            this.tasks[taskId].reject(new Error(
+            task.reject(new Error(
                 `RPC request timeout after ${num} ${unit}`
             ));
         }, this.timeout);
@@ -422,11 +410,6 @@ export class RpcClient extends RpcChannel {
         let fn = function (...args: any[]): Promise<any> {
             return new Promise(async (resolve, reject) => {
                 let taskId = self.createTask(resolve, reject);
-
-                if (!self.connecting && !self.connected && !self.closed) {
-                    self.connecting = true;
-                    await self.reconnect();
-                }
 
                 self.send(RpcEvents.REQUEST, taskId, name, method, ...args);
             });

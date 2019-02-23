@@ -183,26 +183,6 @@ describe("Alar ModuleProxy", () => {
         });
     });
 
-    it("should reconnect the RPC service after disconnect automatically", (done) => {
-        awaiter(null, null, null, function* () {
-            var filename = __dirname + "/server/index.js";
-            var proc = yield fork(filename);
-            var client = yield app.connect(config);
-
-            client.register(app.service.user);
-
-            proc.kill();
-            proc = yield fork(filename);
-
-            assert.strictEqual(yield app.service.user.remote().getName(), "Mr. Handsome");
-
-            yield client.close();
-            proc.kill();
-            done();
-        });
-
-    });
-
     it("should reconnect the RPC service in the background automatically", (done) => {
         awaiter(null, null, null, function* () {
             var filename = __dirname + "/server/index.js";

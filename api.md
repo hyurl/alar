@@ -139,9 +139,9 @@ the `host` and `port`. By default `timeout` is set `5000`ms, works both in
 connection and IPC requests.
 
 The channel provides internal support for re-connection, if a remote service is 
-disconnected e.g. the server shutdown (even manually), the traffic 
-will be redirected to other online services, and the client will try to 
-reconnect repeatedly in the background (according to `timeout`).
+disconnected e.g. the server shutdown (even manually), the traffic will be 
+redirected to other online services, and the client will try to reconnect 
+repeatedly in the background (according to `timeout`).
 
 # RpcChannel
 
