@@ -12,7 +12,14 @@
     "url": "git+https://github.com/hyurl/alar.git"
   },
   "keywords": [
-    "micro-service"
+    "module",
+    "proxy",
+    "auto-load",
+    "hot-realod",
+    "micro-service",
+    "ipc",
+    "rpc",
+    "remote"
   ],
   "author": "Ayon Lee <i@hyurl.com>",
   "license": "MIT",
