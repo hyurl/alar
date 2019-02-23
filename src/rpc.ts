@@ -367,10 +367,10 @@ export class RpcClient extends RpcChannel {
         try {
             timeout && (await sleep(timeout));
             await this.open();
-        } finally {
-            if (this.connected) {
-                this.resume(); // resume service
-            }
+        } catch (e) { }
+
+        if (this.connected) {
+            this.resume(); // resume service
         }
     }
 

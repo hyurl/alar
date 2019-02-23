@@ -270,10 +270,9 @@ class RpcClient extends RpcChannel {
                 timeout && (yield sleep(timeout));
                 yield this.open();
             }
-            finally {
-                if (this.connected) {
-                    this.resume();
-                }
+            catch (e) { }
+            if (this.connected) {
+                this.resume();
             }
         });
     }
