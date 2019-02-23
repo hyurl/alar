@@ -191,6 +191,26 @@ describe("Alar ModuleProxy", () => {
 
             client.register(app.service.user);
 
+            proc.kill();
+            proc = yield fork(filename);
+
+            assert.strictEqual(yield app.service.user.remote().getName(), "Mr. Handsome");
+
+            yield client.close();
+            proc.kill();
+            done();
+        });
+
+    });
+
+    it("should reconnect the RPC service in the background automatically", (done) => {
+        awaiter(null, null, null, function* () {
+            var filename = __dirname + "/server/index.js";
+            var proc = yield fork(filename);
+            var client = yield app.connect(config);
+
+            client.register(app.service.user);
+
             // kill the server and restart it, the client will reconnect in the
             // background automatically.
             proc.kill();
@@ -204,6 +224,22 @@ describe("Alar ModuleProxy", () => {
 
             yield client.close();
             proc.kill();
+            done();
+        });
+    });
+
+    it("should reject error is no remote service is available", (done) => {
+        awaiter(null, null, null, function* () {
+            let err;
+
+            try {
+                yield app.service.user.remote().getName();
+            } catch (e) {
+                err = e;
+            }
+
+            assert.ok(err instanceof ReferenceError);
+
             done();
         });
     });

@@ -4,7 +4,13 @@ import * as fs from "fs-extra";
 import { send, receive } from "bsp";
 import isSocketResetError = require("is-socket-reset-error");
 import sleep = require("sleep-promise");
-import { set, obj2err, err2obj, absPath, getInstance } from './util';
+import {
+    obj2err,
+    err2obj,
+    absPath,
+    createRemoteInstance,
+    mergeFnProperties
+} from './util';
 
 type Request = [number, number, string, string, ...any[]];
 type Response = [number, number, any];
@@ -12,8 +18,7 @@ type Task = {
     resolve: (res: any) => void,
     reject: (err: Error) => void
 };
-
-export enum RpcEvents {
+enum RpcEvents {
     REQUEST,
     RESPONSE,
     ERROR,
@@ -172,8 +177,11 @@ export class RpcServer extends RpcChannel {
 }
 
 export class RpcClient extends RpcChannel {
+    /** Whether the channel is in connecting state. */
     connecting = false;
+    /** Whether the channel is connected. */
     connected = false;
+    /** Whether the channel is closed. */
     closed = false;
     private socket: net.Socket;
     private initiated = false;
@@ -200,12 +208,10 @@ export class RpcClient extends RpcChannel {
             // background.
             !this.connecting && this.socket.emit("close", false);
         }).on("close", () => {
-            // If the socket is closed or reset, stop the service 
-            // immediately and try to reconnect if the channel is not closed.
-            // If the channel is not closed, the socket will try reconnect 
-            // forever, so that it can discover service automatically.
+            // If the socket is closed or reset, pause the service immediately 
+            // and try to reconnect if the channel is not closed.
             this.connected = false;
-            this.stop();
+            this.pause();
 
             if (!this.closed && !this.connecting) {
                 this.connecting = true;
@@ -265,10 +271,11 @@ export class RpcClient extends RpcChannel {
                     this.connecting = false;
 
                     // An EALREADY error may happen if background re-connections
-                    // got conflicted and one of the them finish connect.
+                    // got conflicted and one of the them finishes connect 
+                    // before others.
                     if (err["code"] === "EALREADY") {
                         listener();
-                        this.continue();
+                        this.resume();
                     } else if (this.initiated) {
                         // If `defer` is enabled, when connection failed, 
                         // the channel will resolve immediately without error,
@@ -290,7 +297,7 @@ export class RpcClient extends RpcChannel {
             this.closed = true;
             this.connected = false;
             this.connecting = false;
-            this.stop();
+            this.pause();
 
             if (this.socket) {
                 this.socket.unref();
@@ -305,53 +312,53 @@ export class RpcClient extends RpcChannel {
     register<T extends object>(mod: ModuleProxy<T>): this {
         this.registry[mod.name] = mod;
 
-        // Add a new proxified singleton instance to the module, so that it can
-        // be used for remote requests. the remote instance should only return
-        // methods.
-        mod["remoteSingletons"][this.dsn] = new Proxy(getInstance(mod, false), {
-            get: (ins, prop: string) => {
-                let isFn = typeof ins[prop] === "function";
-
-                if (isFn && !ins[prop].proxified) {
-                    set(ins, prop, this.createFunction(ins, mod.name, prop));
-                }
-
-                return isFn ? ins[prop] : undefined;
-            },
-            has: (ins, prop: string) => {
-                return typeof ins[prop] === "function";
+        mod["remoteSingletons"][this.dsn] = createRemoteInstance(
+            mod,
+            (ins, prop) => {
+                return this.createFunction(ins, mod.name, prop);
             }
-        });
+        );
 
         return this;
     }
 
-    private stop() {
+    /** Pauses the channel and redirect traffic to other channels. */
+    pause(): boolean {
         let { dsn } = this;
+        let success = false;
 
         for (let name in this.registry) {
             let instances = this.registry[name]["remoteSingletons"];
 
             // Remove the remote instance from the module proxy, but keep at 
-            // least one instance alive. For removed instance, the traffic will 
-            // be redirected to other alive services, if the final service 
-            // is also dead, RPC calling should just throw timeout errors.
-            if (Object.keys(instances).length > 1) {
+            // least one instance alive if the channel is not closed. For 
+            // removed instance, the traffic will be redirected to other alive 
+            // services, if the final service is also dead, RPC calling should 
+            // just throw timeout errors.
+            if (this.closed || Object.keys(instances).length > 1) {
                 delete instances[dsn];
+                success = true;
             }
         }
+
+        return success;
     }
 
-    private continue() {
+    /** Resumes the channel and continue handling traffic. */
+    resume(): boolean {
         let { dsn } = this;
+        let success = false;
 
         for (let name in this.registry) {
             let instances = this.registry[name]["remoteSingletons"];
 
             if (!instances[dsn]) {
                 this.register(this.registry[name]);
+                success = true;
             }
         }
+
+        return success;
     }
 
     private async reconnect(timeout = 0) {
@@ -362,7 +369,7 @@ export class RpcClient extends RpcChannel {
             await this.open();
         } finally {
             if (this.connected) {
-                this.continue(); // continue service
+                this.resume(); // resume service
             }
         }
     }
@@ -425,15 +432,6 @@ export class RpcClient extends RpcChannel {
             });
         };
 
-        // Reset the new function's properties so that makes them look like the 
-        // original function's.
-        set(fn, "proxified", true);
-        set(fn, "name", method);
-        set(fn, "length", originMethod.length);
-        set(fn, "toString", function toString() {
-            return Function.prototype.toString.call(originMethod);
-        }, true);
-
-        return fn;
+        return mergeFnProperties(fn, originMethod);
     }
 }

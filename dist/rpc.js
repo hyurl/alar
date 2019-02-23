@@ -13,7 +13,7 @@ var RpcEvents;
     RpcEvents[RpcEvents["REQUEST"] = 0] = "REQUEST";
     RpcEvents[RpcEvents["RESPONSE"] = 1] = "RESPONSE";
     RpcEvents[RpcEvents["ERROR"] = 2] = "ERROR";
-})(RpcEvents = exports.RpcEvents || (exports.RpcEvents = {}));
+})(RpcEvents || (RpcEvents = {}));
 class RpcChannel {
     constructor(options, host) {
         this.host = "0.0.0.0";
@@ -150,7 +150,7 @@ class RpcClient extends RpcChannel {
             !this.connecting && this.socket.emit("close", false);
         }).on("close", () => {
             this.connected = false;
-            this.stop();
+            this.pause();
             if (!this.closed && !this.connecting) {
                 this.connecting = true;
                 this.reconnect(this.timeout);
@@ -201,7 +201,7 @@ class RpcClient extends RpcChannel {
                     this.connecting = false;
                     if (err["code"] === "EALREADY") {
                         listener();
-                        this.continue();
+                        this.resume();
                     }
                     else if (this.initiated) {
                         this.initiated = true;
@@ -220,7 +220,7 @@ class RpcClient extends RpcChannel {
             this.closed = true;
             this.connected = false;
             this.connecting = false;
-            this.stop();
+            this.pause();
             if (this.socket) {
                 this.socket.unref();
                 this.socket.end();
@@ -233,37 +233,34 @@ class RpcClient extends RpcChannel {
     }
     register(mod) {
         this.registry[mod.name] = mod;
-        mod["remoteSingletons"][this.dsn] = new Proxy(util_1.getInstance(mod, false), {
-            get: (ins, prop) => {
-                let isFn = typeof ins[prop] === "function";
-                if (isFn && !ins[prop].proxified) {
-                    util_1.set(ins, prop, this.createFunction(ins, mod.name, prop));
-                }
-                return isFn ? ins[prop] : undefined;
-            },
-            has: (ins, prop) => {
-                return typeof ins[prop] === "function";
-            }
+        mod["remoteSingletons"][this.dsn] = util_1.createRemoteInstance(mod, (ins, prop) => {
+            return this.createFunction(ins, mod.name, prop);
         });
         return this;
     }
-    stop() {
+    pause() {
         let { dsn } = this;
+        let success = false;
         for (let name in this.registry) {
             let instances = this.registry[name]["remoteSingletons"];
-            if (Object.keys(instances).length > 1) {
+            if (this.closed || Object.keys(instances).length > 1) {
                 delete instances[dsn];
+                success = true;
             }
         }
+        return success;
     }
-    continue() {
+    resume() {
         let { dsn } = this;
+        let success = false;
         for (let name in this.registry) {
             let instances = this.registry[name]["remoteSingletons"];
             if (!instances[dsn]) {
                 this.register(this.registry[name]);
+                success = true;
             }
         }
+        return success;
     }
     reconnect(timeout = 0) {
         return tslib_1.__awaiter(this, void 0, void 0, function* () {
@@ -275,7 +272,7 @@ class RpcClient extends RpcChannel {
             }
             finally {
                 if (this.connected) {
-                    this.continue();
+                    this.resume();
                 }
             }
         });
@@ -324,13 +321,7 @@ class RpcClient extends RpcChannel {
                 self.send(RpcEvents.REQUEST, taskId, name, method, ...args);
             }));
         };
-        util_1.set(fn, "proxified", true);
-        util_1.set(fn, "name", method);
-        util_1.set(fn, "length", originMethod.length);
-        util_1.set(fn, "toString", function toString() {
-            return Function.prototype.toString.call(originMethod);
-        }, true);
-        return fn;
+        return util_1.mergeFnProperties(fn, originMethod);
     }
 }
 exports.RpcClient = RpcClient;

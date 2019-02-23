@@ -27,6 +27,7 @@ let ModuleProxy = ModuleProxy_1 = class ModuleProxy {
         this.singletons = {};
         this.remoteSingletons = {};
         this.children = {};
+        this.remoteHolder = null;
         this.path = path_1.normalize(path);
     }
     get exports() {
@@ -82,8 +83,15 @@ let ModuleProxy = ModuleProxy_1 = class ModuleProxy {
             let id = keys[hash(objHash(route)) % keys.length];
             return this.remoteSingletons[id];
         }
+        else if (this.remoteHolder) {
+            return this.remoteHolder;
+        }
         else {
-            return this.instance();
+            return this.remoteHolder = util_1.createRemoteInstance(this, (ins, prop) => {
+                return util_1.mergeFnProperties(function () {
+                    return Promise.reject(new ReferenceError("RPC service is not available."));
+                }, ins[prop]);
+            });
         }
     }
     serve(config) {

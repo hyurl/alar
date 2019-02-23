@@ -5,7 +5,7 @@ import hash = require("string-hash");
 import objHash = require("object-hash");
 import startsWith = require("lodash/startsWith");
 import { RpcOptions, RpcChannel, RpcServer, RpcClient } from './rpc';
-import { getInstance } from './util';
+import { getInstance, createRemoteInstance, mergeFnProperties } from './util';
 
 export { RpcOptions, RpcChannel, FSWatcher };
 
@@ -83,6 +83,7 @@ export class ModuleProxy<T = any> {
     private singletons: { [name: string]: T } = {};
     private remoteSingletons: { [dsn: string]: FunctionProperties<T> } = {};
     private children: { [name: string]: ModuleProxy } = {};
+    private remoteHolder?: FunctionProperties<T> = null;
 
     constructor(readonly name: string, path: string) {
         this.path = normalize(path);
@@ -150,11 +151,22 @@ export class ModuleProxy<T = any> {
         let keys = Object.keys(this.remoteSingletons);
 
         if (keys.length) {
+            // Redirect traffic automatically.
             let id = keys[hash(objHash(route)) % keys.length];
             return this.remoteSingletons[id];
+        } else if (this.remoteHolder) {
+            return this.remoteHolder;
         } else {
-            // If no remote instance is connected, calls the local one instead.
-            return this.instance();
+            return this.remoteHolder = createRemoteInstance(
+                <any>this,
+                (ins, prop) => {
+                    return mergeFnProperties(function () {
+                        return Promise.reject(
+                            new ReferenceError("RPC service is not available.")
+                        );
+                    }, ins[prop]);
+                }
+            );
         }
     }
 

@@ -165,7 +165,7 @@ The following properties and methods work in both implementations:
     whenever an error occurred in asynchronous operations which can't be caught
     during run-time.
 
-## RpcServer
+# RpcServer
 
 ```typescript
 class RpcServer extends RpcChannel { }
@@ -173,14 +173,16 @@ class RpcServer extends RpcChannel { }
 
 The server implementation of the RPC channel.
 
-## RpcClient
+# RpcClient
 
 ```typescript
-class RpcClient extends RpcChannel {
-    connecting: boolean;
-    connected: boolean;
-    closed: boolean;
-}
+class RpcClient extends RpcChannel { }
 ```
 
 The client implementation of the RPC channel.
+
+- `connecting: boolean` Whether the channel is in connecting state.
+- `connected: boolean` Whether the channel is connected.
+- `closed: boolean` Whether the channel is closed.
+- `pause(): boolean`  Pauses the channel and redirect traffic to other channels.
+- `resume(): boolean` Resumes the channel and continue handling traffic.

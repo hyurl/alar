@@ -5,13 +5,14 @@ const path = require("path");
 const assert_1 = require("assert");
 const pick = require("lodash/pick");
 const omit = require("lodash/omit");
-const WinPipe = /\\\\[\?\.]\\pipe\\/i;
+const startsWith = require("lodash/startsWith");
+const WinPipe = "\\\\?\\pipe\\";
 function absPath(filename, withPipe) {
     if (!path.isAbsolute(filename)) {
         filename = path.resolve(process.cwd(), filename);
     }
-    if (withPipe && os.platform() == "win32" && !(WinPipe.test(filename))) {
-        filename = "\\\\?\\pipe\\" + filename;
+    if (withPipe && os.platform() == "win32" && !startsWith(filename, WinPipe)) {
+        filename = WinPipe + filename;
     }
     return filename;
 }
@@ -75,4 +76,29 @@ function obj2err(obj) {
     return err;
 }
 exports.obj2err = obj2err;
+function mergeFnProperties(fn, origin) {
+    set(fn, "proxified", true);
+    set(fn, "name", origin.name);
+    set(fn, "length", origin.length);
+    set(fn, "toString", function toString() {
+        return Function.prototype.toString.call(origin);
+    }, true);
+    return fn;
+}
+exports.mergeFnProperties = mergeFnProperties;
+function createRemoteInstance(mod, fnCreator) {
+    return new Proxy(getInstance(mod, false), {
+        get: (ins, prop) => {
+            let isFn = typeof ins[prop] === "function";
+            if (isFn && !ins[prop].proxified) {
+                set(ins, prop, fnCreator(ins, prop));
+            }
+            return isFn ? ins[prop] : undefined;
+        },
+        has: (ins, prop) => {
+            return typeof ins[prop] === "function";
+        }
+    });
+}
+exports.createRemoteInstance = createRemoteInstance;
 //# sourceMappingURL=util.js.map

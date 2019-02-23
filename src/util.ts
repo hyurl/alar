@@ -3,9 +3,10 @@ import * as path from "path";
 import { AssertionError } from 'assert';
 import pick = require("lodash/pick");
 import omit = require("lodash/omit");
+import startsWith = require("lodash/startsWith");
 
 type ErrorObject = Error & { [x: string]: any };
-const WinPipe = /\\\\[\?\.]\\pipe\\/i;
+const WinPipe = "\\\\?\\pipe\\";
 
 export function absPath(filename: string, withPipe?: boolean): string {
     // resolve path to be absolute
@@ -13,14 +14,14 @@ export function absPath(filename: string, withPipe?: boolean): string {
         filename = path.resolve(process.cwd(), filename);
     }
 
-    if (withPipe && os.platform() == "win32" && !(WinPipe.test(filename))) {
-        filename = "\\\\?\\pipe\\" + filename;
+    if (withPipe && os.platform() == "win32" && !startsWith(filename, WinPipe)) {
+        filename = WinPipe + filename;
     }
 
     return filename;
 }
 
-export function set(target, prop, value, writable = false) {
+export function set(target: any, prop: any, value: any, writable = false) {
     Object.defineProperty(target, prop, {
         configurable: true,
         enumerable: false,
@@ -78,4 +79,39 @@ export function obj2err(obj: ErrorObject): ErrorObject {
     }
 
     return err;
+}
+
+export function mergeFnProperties(fn: Function, origin: Function) {
+    set(fn, "proxified", true);
+    set(fn, "name", origin.name);
+    set(fn, "length", origin.length);
+    set(fn, "toString", function toString() {
+        return Function.prototype.toString.call(origin);
+    }, true);
+
+    return fn;
+}
+
+export function createRemoteInstance(
+    mod: ModuleProxy<any>,
+    fnCreator: (ins: any, prop: string) => Function
+) {
+
+    // Generate a proxified singleton instance to the module, so that it can
+    // be used for remote requests. the remote instance should only return
+    // methods.
+    return new Proxy(getInstance(mod, false), {
+        get: (ins, prop: string) => {
+            let isFn = typeof ins[prop] === "function";
+
+            if (isFn && !ins[prop].proxified) {
+                set(ins, prop, fnCreator(ins, prop));
+            }
+
+            return isFn ? ins[prop] : undefined;
+        },
+        has: (ins, prop: string) => {
+            return typeof ins[prop] === "function";
+        }
+    });
 }
