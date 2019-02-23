@@ -136,7 +136,6 @@ class RpcClient extends RpcChannel {
         this.tasks = {};
     }
     init() {
-        this.initiated = true;
         this.socket = new net.Socket();
         this.socket.on("error", err => {
             if (this.connected && isSocketResetError(err)) {
@@ -169,13 +168,14 @@ class RpcClient extends RpcChannel {
         return new Promise((resolve, reject) => {
             if (this.closed)
                 return resolve(this);
-            if (this.initiated) {
+            if (this.socket) {
                 this.socket.removeAllListeners("connect");
             }
             else {
                 this.init();
             }
             let listener = () => {
+                this.initiated = true;
                 this.connected = true;
                 this.connecting = false;
                 resolve(this);
@@ -196,7 +196,8 @@ class RpcClient extends RpcChannel {
                         listener();
                         this.continue();
                     }
-                    else if (this.defer) {
+                    else if (this.defer || this.initiated) {
+                        this.initiated = true;
                         this.socket.emit("close", !!err);
                         resolve(this);
                     }
