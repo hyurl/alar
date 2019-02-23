@@ -30,8 +30,6 @@
   "dependencies": {
     "@types/chokidar": "^1.7.5",
     "@types/fs-extra": "^5.0.4",
-    "@types/lodash": "^4.14.120",
-    "@types/object-hash": "^1.2.0",
     "bsp": "^0.2.0",
     "chokidar": "^2.0.4",
     "fs-extra": "^7.0.1",
@@ -44,7 +42,9 @@
     "tslib": "^1.9.3"
   },
   "devDependencies": {
+    "@types/lodash": "^4.14.121",
     "@types/node": "^10.12.18",
+    "@types/object-hash": "^1.2.0",
     "mocha": "^5.2.0",
     "source-map-support": "^0.5.10"
   }
