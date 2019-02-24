@@ -79,11 +79,11 @@ const defaultLoader: ModuleLoader = {
 @applyMagic
 export class ModuleProxy<T = any> {
     readonly path: string;
-    private loader: ModuleLoader = defaultLoader;
-    private singletons: { [name: string]: T } = {};
-    private remoteSingletons: { [dsn: string]: FunctionProperties<T> } = {};
-    private children: { [name: string]: ModuleProxy } = {};
-    private remoteHolder?: FunctionProperties<T> = null;
+    protected loader: ModuleLoader = defaultLoader;
+    protected singletons: { [name: string]: T } = {};
+    protected remoteSingletons: { [dsn: string]: FunctionProperties<T> } = {};
+    protected children: { [name: string]: ModuleProxy } = {};
+    protected remoteHolder?: FunctionProperties<T> = null;
 
     constructor(readonly name: string, path: string) {
         this.path = normalize(path);
