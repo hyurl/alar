@@ -155,10 +155,10 @@ let ModuleProxy = ModuleProxy_1 = class ModuleProxy {
             return this.children[prop];
         }
         else if (typeof prop != "symbol") {
-            let child = this.children[prop] = new ModuleProxy_1(this.name + "." + String(prop), this.path + path_1.sep + String(prop));
+            let child = new this.constructor(this.name + "." + String(prop), this.path + path_1.sep + String(prop));
             child.singletons = this.singletons;
             child.loader = this.loader;
-            return child;
+            return this.children[prop] = child;
         }
     }
     __has(prop) {

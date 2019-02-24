@@ -242,14 +242,15 @@ export class ModuleProxy<T = any> {
         } else if (prop in this.children) {
             return this.children[prop];
         } else if (typeof prop != "symbol") {
-            let child = this.children[prop] = new ModuleProxy(
+            let child = new (<typeof ModuleProxy>this.constructor)(
                 this.name + "." + String(prop),
                 this.path + sep + String(prop)
             );
 
             child.singletons = this.singletons;
             child.loader = this.loader;
-            return child;
+
+            return this.children[prop] = child;
         }
     }
 
