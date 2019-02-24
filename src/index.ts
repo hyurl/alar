@@ -7,7 +7,7 @@ import startsWith = require("lodash/startsWith");
 import { RpcOptions, RpcChannel, RpcServer, RpcClient } from './rpc';
 import { getInstance, createRemoteInstance, mergeFnProperties } from './util';
 
-export { RpcOptions, RpcChannel, FSWatcher };
+export { RpcOptions, RpcChannel, RpcServer, RpcClient, FSWatcher };
 
 // Auto-Load And Remote.
 
