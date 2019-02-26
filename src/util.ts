@@ -106,13 +106,14 @@ export function createRemoteInstance(
     // methods.
     return new Proxy(getInstance(mod, false), {
         get: (ins, prop: string) => {
-            let isFn = typeof ins[prop] === "function";
+            let type = typeof ins[prop];
+            let isFn = type === "function";
 
             if (isFn && !ins[prop].proxified) {
                 set(ins, prop, fnCreator(ins, prop));
             }
 
-            return isFn ? ins[prop] : undefined;
+            return isFn ? ins[prop] : (type === "undefined" ? undefined : null);
         },
         has: (ins, prop: string) => {
             return typeof ins[prop] === "function";

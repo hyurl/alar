@@ -32,9 +32,10 @@ The interface has the following properties and methods:
 **NOTE: IPC/RPC calling will serialize the data via JSON, those data that can**
 **not be serialized will be lost during transmission.**
 
-**NOTE: properties cannot be accessed remotely, if trying so, `undefined` will**
-**be returned instead, so it's better to declare properties `protected` or**
-**`private` in any service class that may potentially served remotely.**
+**NOTE: properties cannot be accessed remotely, if trying so, `null` or**
+**`undefined` will be returned instead, so it's better to declare properties**
+**`protected` or `private` in any service class that may potentially served**
+**remotely.**
 
 *History version of Alar provides a `remote()` method to access remote ability,*
 *however since 3.0, with a little API change, `remote()` has been merged to*
