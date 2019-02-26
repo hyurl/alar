@@ -2,7 +2,7 @@ import { extname, sep } from "path";
 import { watch, FSWatcher } from "chokidar";
 import startsWith = require("lodash/startsWith");
 import { RpcOptions, RpcChannel, RpcServer, RpcClient } from './rpc';
-import { ModuleProxyConstructor } from "./proxy";
+import { ModuleProxyBase } from "./proxy";
 import { local } from './util';
 
 export { RpcOptions, RpcChannel, RpcServer, RpcClient, FSWatcher };
@@ -71,7 +71,7 @@ export interface ModuleLoader {
     unload(filename: string): void;
 }
 
-export class ModuleProxy extends ModuleProxyConstructor<any> {
+export class ModuleProxy extends ModuleProxyBase<any> {
     /**
      * If passed to the `ModuleProxy<T>.instance()`, the method will always 
      * return the local instance.

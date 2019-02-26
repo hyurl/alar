@@ -1,7 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const tslib_1 = require("tslib");
-var ModuleProxyConstructor_1;
+var ModuleProxyBase_1;
 const hash = require("string-hash");
 const objectHash = require("object-hash");
 const path_1 = require("path");
@@ -15,7 +15,7 @@ const defaultLoader = {
         delete require.cache[filename];
     }
 };
-let ModuleProxyConstructor = ModuleProxyConstructor_1 = class ModuleProxyConstructor {
+let ModuleProxyBase = ModuleProxyBase_1 = class ModuleProxyBase {
     constructor(name, path) {
         this.name = name;
         this.loader = defaultLoader;
@@ -89,7 +89,7 @@ let ModuleProxyConstructor = ModuleProxyConstructor_1 = class ModuleProxyConstru
             return this.children[prop];
         }
         else if (typeof prop != "symbol") {
-            let child = new ModuleProxyConstructor_1(this.name + "." + String(prop), this.path + path_1.sep + String(prop));
+            let child = new ModuleProxyBase_1(this.name + "." + String(prop), this.path + path_1.sep + String(prop));
             child.singletons = this.singletons;
             child.loader = this.loader;
             return this.children[prop] = child;
@@ -99,8 +99,8 @@ let ModuleProxyConstructor = ModuleProxyConstructor_1 = class ModuleProxyConstru
         return (prop in this) || (prop in this.children);
     }
 };
-ModuleProxyConstructor = ModuleProxyConstructor_1 = tslib_1.__decorate([
+ModuleProxyBase = ModuleProxyBase_1 = tslib_1.__decorate([
     js_magic_1.applyMagic
-], ModuleProxyConstructor);
-exports.ModuleProxyConstructor = ModuleProxyConstructor;
+], ModuleProxyBase);
+exports.ModuleProxyBase = ModuleProxyBase;
 //# sourceMappingURL=proxy.js.map

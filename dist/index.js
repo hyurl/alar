@@ -10,7 +10,7 @@ exports.RpcServer = rpc_1.RpcServer;
 exports.RpcClient = rpc_1.RpcClient;
 const proxy_1 = require("./proxy");
 const util_1 = require("./util");
-class ModuleProxy extends proxy_1.ModuleProxyConstructor {
+class ModuleProxy extends proxy_1.ModuleProxyBase {
     constructor() {
         super(...arguments);
         this.local = util_1.local;

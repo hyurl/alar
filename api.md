@@ -44,7 +44,7 @@ The interface has the following properties and methods:
 # ModuleConstructor
 
 This interface will be globalized as well, it indicates the very class 
-constructor of the module. 
+constructor of the module (default export).
 
 ```typescript
 interface ModuleConstructor<T> {
@@ -81,8 +81,7 @@ declare global {
 }
 ```
 
-This class is actually the base of global interface ModuleProxy, and it has the 
-following extra properties and methods:
+This class has the following properties and methods:
 
 - `serve(config: string | RpcOptions): Promise<RpcChannel>` Serves an RPC 
     service according to the given configuration.
@@ -112,7 +111,7 @@ export interface ModuleLoader {
 
 By default, Alar supports JavaScript modules and (TypeScript modules in 
 **ts-node**), By setting a custom loader, a ModuleProxy instance can resolve any
-kind of module wanted. NOTE: The loader must provide cache support.
+kind of module wanted. (NOTE: The loader must provide cache support.)
 
 - `extesion` Extension name of the module file, by default, it's `.js` (or `.ts`
     in ts-node).

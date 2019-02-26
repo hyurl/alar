@@ -15,7 +15,7 @@ const defaultLoader: ModuleLoader = {
 }
 
 @applyMagic
-export class ModuleProxyConstructor<T = any> implements ModuleProxy<T> {
+export class ModuleProxyBase<T = any> implements ModuleProxy<T> {
     readonly path: string;
     protected loader: ModuleLoader = defaultLoader;
     protected singletons: { [name: string]: T } = {};
@@ -99,7 +99,7 @@ export class ModuleProxyConstructor<T = any> implements ModuleProxy<T> {
         } else if (prop in this.children) {
             return this.children[prop];
         } else if (typeof prop != "symbol") {
-            let child = new ModuleProxyConstructor(
+            let child = new ModuleProxyBase(
                 this.name + "." + String(prop),
                 this.path + sep + String(prop)
             );
