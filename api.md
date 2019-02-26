@@ -26,7 +26,7 @@ The interface has the following properties and methods:
     will automatically calculate the `route` and direct the traffic to the 
     corresponding remote instance.
 - `noLocal(): this` If the module is registered as remote service, however when 
-    no RPC channel is available, by default, `instance()` will return the local 
+    no RPC channel is available, by default, `instance()` will fail to the local 
     instance, using this method to disable the default behavior.
 
 **NOTE: IPC/RPC calling will serialize the data via JSON, those data that can**

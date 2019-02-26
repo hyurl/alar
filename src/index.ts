@@ -51,7 +51,7 @@ declare global {
 
         /**
          * If the module is registered as remote service, however when no RPC 
-         * channel is available, by default, `instance()` will return the local 
+         * channel is available, by default, `instance()` will fail to the local
          * instance, using this method to disable the default behavior.
          */
         noLocal(): this;
