@@ -1,88 +1,22 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-const tslib_1 = require("tslib");
-var ModuleProxy_1;
 const path_1 = require("path");
-const js_magic_1 = require("js-magic");
 const chokidar_1 = require("chokidar");
 exports.FSWatcher = chokidar_1.FSWatcher;
-const hash = require("string-hash");
-const objHash = require("object-hash");
 const startsWith = require("lodash/startsWith");
 const rpc_1 = require("./rpc");
 exports.RpcChannel = rpc_1.RpcChannel;
 exports.RpcServer = rpc_1.RpcServer;
 exports.RpcClient = rpc_1.RpcClient;
+const proxy_1 = require("./proxy");
 const util_1 = require("./util");
-const isTsNode = process.execArgv.join(" ").includes("ts-node");
-const defaultLoader = {
-    extesion: isTsNode ? ".ts" : ".js",
-    load: require,
-    unload(filename) {
-        delete require.cache[filename];
-    }
-};
-let ModuleProxy = ModuleProxy_1 = class ModuleProxy {
-    constructor(name, path) {
-        this.name = name;
-        this.loader = defaultLoader;
-        this.singletons = {};
-        this.remoteSingletons = {};
-        this.children = {};
-        this.path = path_1.normalize(path);
+class ModuleProxy extends proxy_1.ModuleProxyConstructor {
+    constructor() {
+        super(...arguments);
+        this.local = util_1.local;
     }
     get exports() {
-        return this.loader.load(this.path + this.loader.extesion);
-    }
-    get proto() {
-        let { exports } = this;
-        if (typeof exports.default === "object")
-            return exports.default;
-        else if (typeof exports.default === "function")
-            return exports.default.prototype;
-        else if (typeof exports === "object")
-            return exports;
-        else if (typeof exports === "function")
-            return exports.prototype;
-        else
-            return null;
-    }
-    get ctor() {
-        let { exports } = this;
-        if (typeof exports.default === "function")
-            return exports.default;
-        else if (typeof exports === "function")
-            return exports;
-        else
-            return null;
-    }
-    create(...args) {
-        if (this.ctor) {
-            return new this.ctor(...args);
-        }
-        else if (this.proto) {
-            return Object.create(this.proto);
-        }
-        else {
-            throw new TypeError(`${this.name} is not a valid module.`);
-        }
-    }
-    instance(route = "") {
-        let keys = Object.keys(this.remoteSingletons);
-        if (keys.length) {
-            let id = keys[hash(objHash(route)) % keys.length];
-            return this.remoteSingletons[id];
-        }
-        else if (this.singletons[this.name]) {
-            return this.singletons[this.name];
-        }
-        else {
-            return (this.singletons[this.name] = util_1.getInstance(this));
-        }
-    }
-    remote(route = "") {
-        process.emitWarning("ModuleProxy<T>.route() has been deprecated, use ModuleProxy<T>.instance() instead");
-        return this.instance(route);
+        return {};
     }
     serve(config) {
         return new rpc_1.RpcServer(config).open();
@@ -135,27 +69,7 @@ let ModuleProxy = ModuleProxy_1 = class ModuleProxy {
     setLoader(loader) {
         this.loader = loader;
     }
-    __get(prop) {
-        if (prop in this) {
-            return this[prop];
-        }
-        else if (prop in this.children) {
-            return this.children[prop];
-        }
-        else if (typeof prop != "symbol") {
-            let child = new this.constructor(this.name + "." + String(prop), this.path + path_1.sep + String(prop));
-            child.singletons = this.singletons;
-            child.loader = this.loader;
-            return this.children[prop] = child;
-        }
-    }
-    __has(prop) {
-        return (prop in this) || (prop in this.children);
-    }
-};
-ModuleProxy = ModuleProxy_1 = tslib_1.__decorate([
-    js_magic_1.applyMagic
-], ModuleProxy);
+}
 exports.ModuleProxy = ModuleProxy;
 exports.default = ModuleProxy;
 //# sourceMappingURL=index.js.map

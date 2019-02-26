@@ -7,6 +7,9 @@ const pick = require("lodash/pick");
 const omit = require("lodash/omit");
 const startsWith = require("lodash/startsWith");
 const WinPipe = "\\\\?\\pipe\\";
+exports.local = Symbol("local");
+exports.remotized = Symbol("remotized");
+exports.noLocal = Symbol("noLocal");
 function absPath(filename, withPipe) {
     if (!path.isAbsolute(filename)) {
         filename = path.resolve(process.cwd(), filename);

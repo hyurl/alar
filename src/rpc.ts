@@ -9,7 +9,9 @@ import {
     err2obj,
     absPath,
     createRemoteInstance,
-    mergeFnProperties
+    mergeFnProperties,
+    local,
+    remotized
 } from './util';
 
 type Request = [number, number, string, string, ...any[]];
@@ -142,7 +144,7 @@ export class RpcServer extends RpcChannel {
                             try {
                                 // Connect to the singleton instance and invokes
                                 // it's method to handle the request.
-                                let ins = this.registry[name].instance();
+                                let ins = this.registry[name].instance(local);
                                 data = await ins[method](...args);
                                 event = RpcEvents.RESPONSE;
                             } catch (err) {
@@ -298,9 +300,10 @@ export class RpcClient extends RpcChannel {
         });
     }
 
-    register<T extends object>(mod: ModuleProxy<T>): this {
+    register<T>(mod: ModuleProxy<T>): this {
         this.registry[mod.name] = mod;
 
+        mod[remotized] = true;
         mod["remoteSingletons"][this.dsn] = createRemoteInstance(
             mod,
             (ins, prop) => {

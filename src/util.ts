@@ -8,6 +8,10 @@ import startsWith = require("lodash/startsWith");
 type ErrorObject = Error & { [x: string]: any };
 const WinPipe = "\\\\?\\pipe\\";
 
+export const local = Symbol("local");
+export const remotized = Symbol("remotized");
+export const noLocal = Symbol("noLocal");
+
 export function absPath(filename: string, withPipe?: boolean): string {
     // resolve path to be absolute
     if (!path.isAbsolute(filename)) {

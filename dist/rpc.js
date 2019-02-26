@@ -89,7 +89,7 @@ class RpcServer extends RpcChannel {
                         if (event === RpcEvents.REQUEST) {
                             let event, data;
                             try {
-                                let ins = this.registry[name].instance();
+                                let ins = this.registry[name].instance(util_1.local);
                                 data = yield ins[method](...args);
                                 event = RpcEvents.RESPONSE;
                             }
@@ -221,6 +221,7 @@ class RpcClient extends RpcChannel {
     }
     register(mod) {
         this.registry[mod.name] = mod;
+        mod[util_1.remotized] = true;
         mod["remoteSingletons"][this.dsn] = util_1.createRemoteInstance(mod, (ins, prop) => {
             return this.createFunction(ins, mod.name, prop);
         });

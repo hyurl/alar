@@ -93,6 +93,10 @@ describe("Alar ModuleProxy", () => {
         assert.strictEqual(ins, config);
     });
 
+    // Due to **chokaidar**'s bug of [Not working with fs.writeFile](https://github.com/paulmillr/chokidar/issues/790)
+    // the watching and reloading feature cannot be tested here, you could just 
+    // test it in your own project.
+    // 
     // it("should watch file change and reload module as expected", (done) => {
     //     awaiter(null, null, null, function* () {
     //         var watcher = app.watch();
@@ -201,19 +205,20 @@ describe("Alar ModuleProxy", () => {
         });
     });
 
-    // it("should reject error is no remote service is available", (done) => {
-    //     awaiter(null, null, null, function* () {
-    //         let err;
+    it("should reject error is no remote service is available", (done) => {
+        awaiter(null, null, null, function* () {
+            let err;
 
-    //         try {
-    //             yield app.service.user.instance().getName();
-    //         } catch (e) {
-    //             err = e;
-    //         }
+            try {
+                app.service.user.noLocal();
+                yield app.service.user.instance().getName();
+            } catch (e) {
+                err = e;
+            }
 
-    //         assert.ok(err instanceof ReferenceError);
+            assert.ok(err instanceof ReferenceError);
 
-    //         done();
-    //     });
-    // });
+            done();
+        });
+    });
 });

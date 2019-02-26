@@ -21,16 +21,19 @@ The interface has the following properties and methods:
     - `create(arg1: R1, arg2: R2, arg3: R3, arg4: R4): T`
     - `create(arg1: R1, arg2: R2, arg3: R3, arg4: R4, arg5: R5): T`
     - `create(...args: any[]): T`
-- `instance(route?: any): T` Gets the singleton or a remote instance of the 
-    module, if connected to one or more remote instances, the module proxy will 
-    automatically calculate the `route` and direct the traffic to the 
+- `instance(route?: any): T` Gets the local singleton or a remote instance of 
+    the module, if connected to one or more remote instances, the module proxy 
+    will automatically calculate the `route` and direct the traffic to the 
     corresponding remote instance.
+- `noLocal(): this` If the module is registered as remote service, however when 
+    no RPC channel is available, by default, `instance()` will return the local 
+    instance, using this method to disable the default behavior.
 
 **NOTE: IPC/RPC calling will serialize the data via JSON, those data that can**
 **not be serialized will be lost during transmission.**
 
-**NOTE: properties can not be accessed remotely, if trying to, `undefined` will**
-**be returned instead. So it's better to declare properties `protected` or**
+**NOTE: properties cannot be accessed remotely, if trying so, `undefined` will**
+**be returned instead, so it's better to declare properties `protected` or**
 **`private` in any service class that may potentially served remotely.**
 
 *History version of Alar provides a `remote()` method to access remote ability,*
@@ -93,6 +96,8 @@ following extra properties and methods:
         [chokidar](https://github.com/paulmillr/chokidar).
 - `setLoader(loader: ModuleLoader): void` Sets a custom loader to resolve the 
     module.
+- `local: symbol` If passed to the `ModuleProxy<T>.instance()`, the method will 
+    always return the local instance.
 
 # ModuleLoader
 
