@@ -77,11 +77,6 @@ describe("Alar ModuleProxy", () => {
         assert.strictEqual(app.service.user.instance().name, "Mr. World");
     });
 
-    it("should set singleton instance via instance() method as expected", () => {
-        app.service.user.instance(app.service.user.create("Mr. Handsome"));
-        assert.strictEqual(app.service.user.instance().name, "Mr. Handsome");
-    });
-
     it("should access to a prototype module as expected", () => {
         assert.strictEqual(app.config.name, "app.config");
         assert.strictEqual(app.config.path, path.normalize(__dirname + "/app/config"));
@@ -150,13 +145,12 @@ describe("Alar ModuleProxy", () => {
             var server = yield app.serve(sockPath);
 
             server.register(app.service.user);
-            app.service.user.instance(app.service.user.create("Mr. World"));
 
             var client = yield app.connect(sockPath);
 
             client.register(app.service.user);
 
-            assert.strictEqual(yield app.service.user.remote().getName(), "Mr. World");
+            assert.strictEqual(yield app.service.user.instance().getName(), "Mr. World");
 
             yield client.close();
             yield server.close();
@@ -169,13 +163,12 @@ describe("Alar ModuleProxy", () => {
             var server = yield app.serve(config);
 
             server.register(app.service.user);
-            app.service.user.instance(app.service.user.create("Mr. World"));
 
             var client = yield app.connect(config);
 
             client.register(app.service.user);
 
-            assert.strictEqual(yield app.service.user.remote().getName(), "Mr. World");
+            assert.strictEqual(yield app.service.user.instance().getName(), "Mr. World");
 
             yield client.close();
             yield server.close();
@@ -200,7 +193,7 @@ describe("Alar ModuleProxy", () => {
                 yield sleep(100);
             }
 
-            assert.strictEqual(yield app.service.user.remote().getName(), "Mr. Handsome");
+            assert.strictEqual(yield app.service.user.instance().getName(), "Mr. Handsome");
 
             yield client.close();
             proc.kill();
@@ -208,19 +201,19 @@ describe("Alar ModuleProxy", () => {
         });
     });
 
-    it("should reject error is no remote service is available", (done) => {
-        awaiter(null, null, null, function* () {
-            let err;
+    // it("should reject error is no remote service is available", (done) => {
+    //     awaiter(null, null, null, function* () {
+    //         let err;
 
-            try {
-                yield app.service.user.remote().getName();
-            } catch (e) {
-                err = e;
-            }
+    //         try {
+    //             yield app.service.user.instance().getName();
+    //         } catch (e) {
+    //             err = e;
+    //         }
 
-            assert.ok(err instanceof ReferenceError);
+    //         assert.ok(err instanceof ReferenceError);
 
-            done();
-        });
-    });
+    //         done();
+    //     });
+    // });
 });

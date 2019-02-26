@@ -5,7 +5,7 @@ import hash = require("string-hash");
 import objHash = require("object-hash");
 import startsWith = require("lodash/startsWith");
 import { RpcOptions, RpcChannel, RpcServer, RpcClient } from './rpc';
-import { getInstance, createRemoteInstance, mergeFnProperties } from './util';
+import { getInstance } from './util';
 
 export { RpcOptions, RpcChannel, RpcServer, RpcClient, FSWatcher };
 
@@ -81,9 +81,8 @@ export class ModuleProxy<T = any> {
     readonly path: string;
     protected loader: ModuleLoader = defaultLoader;
     protected singletons: { [name: string]: T } = {};
-    protected remoteSingletons: { [dsn: string]: FunctionProperties<T> } = {};
+    protected remoteSingletons: { [dsn: string]: T } = {};
     protected children: { [name: string]: ModuleProxy } = {};
-    protected remoteHolder?: FunctionProperties<T> = null;
 
     constructor(readonly name: string, path: string) {
         this.path = normalize(path);
@@ -131,9 +130,14 @@ export class ModuleProxy<T = any> {
     }
 
     /** Sets/Gets the singleton instance of the module. */
-    protected instance(ins?: T): T {
-        if (ins) {
-            return (this.singletons[this.name] = ins);
+    protected instance(route: any = ""): T {
+        let keys = Object.keys(this.remoteSingletons);
+
+        if (keys.length) {
+            // If the module is connected to one or more remote instances,
+            // redirect traffic to them automatically.
+            let id = keys[hash(objHash(route)) % keys.length];
+            return this.remoteSingletons[id];
         } else if (this.singletons[this.name]) {
             return this.singletons[this.name];
         } else {
@@ -147,27 +151,9 @@ export class ModuleProxy<T = any> {
      * The module proxy will automatically calculate the route and direct the 
      * traffic to the corresponding remote instance.
      */
-    protected remote(route: any = ""): FunctionProperties<T> {
-        let keys = Object.keys(this.remoteSingletons);
-
-        if (keys.length) {
-            // Redirect traffic automatically.
-            let id = keys[hash(objHash(route)) % keys.length];
-            return this.remoteSingletons[id];
-        } else if (this.remoteHolder) {
-            return this.remoteHolder;
-        } else {
-            return this.remoteHolder = createRemoteInstance(
-                <any>this,
-                (ins, prop) => {
-                    return mergeFnProperties(function () {
-                        return Promise.reject(
-                            new ReferenceError("RPC service is not available.")
-                        );
-                    }, ins[prop]);
-                }
-            );
-        }
+    protected remote(route: any = ""): T {
+        process.emitWarning("ModuleProxy<T>.route() has been deprecated, use ModuleProxy<T>.instance() instead");
+        return this.instance(route);
     }
 
     /** Serves an RPC service according to the given configuration. */

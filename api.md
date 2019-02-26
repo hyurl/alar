@@ -21,10 +21,21 @@ The interface has the following properties and methods:
     - `create(arg1: R1, arg2: R2, arg3: R3, arg4: R4): T`
     - `create(arg1: R1, arg2: R2, arg3: R3, arg4: R4, arg5: R5): T`
     - `create(...args: any[]): T`
-- `instance(ins?: T): T` Sets/Gets the singleton instance of the module.
-- `remote(route?: any): T` Gets a remote instance connected according to 
-    the `route`. The module proxy will automatically calculate the route and 
-    direct the traffic to the corresponding remote instance.
+- `instance(route?: any): T` Gets the singleton or a remote instance of the 
+    module, if connected to one or more remote instances, the module proxy will 
+    automatically calculate the `route` and direct the traffic to the 
+    corresponding remote instance.
+
+**NOTE: IPC/RPC calling will serialize the data via JSON, those data that can**
+**not be serialized will be lost during transmission.**
+
+**NOTE: properties can not be accessed remotely, if trying to, `undefined` will**
+**be returned instead. So it's better to declare properties `protected` or**
+**`private` in any service class that may potentially served remotely.**
+
+*History version of Alar provides a `remote()` method to access remote ability,*
+*however since 3.0, with a little API change, `remote()` has been merged to*
+*`instance()` and is deprecated.*
 
 # ModuleConstructor
 

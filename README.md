@@ -185,9 +185,14 @@ import { App } from "./index";
 
     service.register(app.service.user);
 
-    console.log(await app.service.user.remote().getName()); // Mr. Handsome
+    // Access the instance in locally style but actually remote.
+    console.log(await app.service.user.instance().getName()); // Mr. Handsome
 })();
 ```
+
+*History version of Alar provides a `remote()` method to access remote ability,*
+*however since 3.0, with a little API change, `remote()` has been merged to*
+*`instance()` and is deprecated.*
 
 ### Hot-reloading in Remote Service
 

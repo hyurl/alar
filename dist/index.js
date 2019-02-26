@@ -29,7 +29,6 @@ let ModuleProxy = ModuleProxy_1 = class ModuleProxy {
         this.singletons = {};
         this.remoteSingletons = {};
         this.children = {};
-        this.remoteHolder = null;
         this.path = path_1.normalize(path);
     }
     get exports() {
@@ -68,9 +67,11 @@ let ModuleProxy = ModuleProxy_1 = class ModuleProxy {
             throw new TypeError(`${this.name} is not a valid module.`);
         }
     }
-    instance(ins) {
-        if (ins) {
-            return (this.singletons[this.name] = ins);
+    instance(route = "") {
+        let keys = Object.keys(this.remoteSingletons);
+        if (keys.length) {
+            let id = keys[hash(objHash(route)) % keys.length];
+            return this.remoteSingletons[id];
         }
         else if (this.singletons[this.name]) {
             return this.singletons[this.name];
@@ -80,21 +81,8 @@ let ModuleProxy = ModuleProxy_1 = class ModuleProxy {
         }
     }
     remote(route = "") {
-        let keys = Object.keys(this.remoteSingletons);
-        if (keys.length) {
-            let id = keys[hash(objHash(route)) % keys.length];
-            return this.remoteSingletons[id];
-        }
-        else if (this.remoteHolder) {
-            return this.remoteHolder;
-        }
-        else {
-            return this.remoteHolder = util_1.createRemoteInstance(this, (ins, prop) => {
-                return util_1.mergeFnProperties(function () {
-                    return Promise.reject(new ReferenceError("RPC service is not available."));
-                }, ins[prop]);
-            });
-        }
+        process.emitWarning("ModuleProxy<T>.route() has been deprecated, use ModuleProxy<T>.instance() instead");
+        return this.instance(route);
     }
     serve(config) {
         return new rpc_1.RpcServer(config).open();
