@@ -23,13 +23,13 @@ without any side-effect.
 
 In order to use Alar, one must create a root `ModuleProxy` instance, and assign
 it to the global namespace, so other files can directly use it without import 
-and share the benefits of declaration merging (in TypeScript, if not using 
-TypeScript, just ignore any tip and code of declaration merging).
+and share the benefits of declaration merging (in TypeScript, if not using is, 
+just ignore any tip and code of declaration merging).
 
 ### Example
 
 ```typescript
-// src/index.ts
+// src/app.ts
 import { ModuleProxy } from "alar";
 
 // Expose and merge the app as a namespace under the global namespace.
@@ -88,14 +88,15 @@ export default class User {
 And other files can access to the modules via the namespace:
 
 ```typescript
-// src/app.ts
-import "./index";
+// src/index.ts
+import "./app";
 
 // The instance() method will link to the singleton instance of the module.
 app.bootstrap.instance().init();
 
 // The create() method will create a new instance.
 var user = app.service.user.create("Mr. Handsome");
+
 console.log(user.getName()); // Mr. Handsome
 ```
 
@@ -160,7 +161,7 @@ export default class User {
 
 ```typescript
 // src/remote-service.ts
-import { App } from "./index";
+import { App } from "./app";
 
 (async () => {
     let service = await App.serve("/tmp/my-app/remote-service.sock");
@@ -171,21 +172,21 @@ import { App } from "./index";
 })();
 ```
 
-Just try `ts-node src/remote-service` (or `node dist/remote-service`), and the
-service will be started immediately.
+Just try `ts-node --files src/remote-service` (or `node dist/remote-service`), 
+and the service will be started immediately.
 
-And in app.ts, connect to the service before using remote functions:
+And in **index.ts**, connect to the service before using remote functions:
 
 ```typescript
-// app.ts
-import { App } from "./index";
+// index.ts
+import { App } from "./app";
 
 (async () => {
     let service = await App.connect("/tmp/my-app/remote-service.sock");
 
     service.register(app.service.user);
 
-    // Access the instance in locally style but actually remote.
+    // Access the instance in local style but actually remote.
     console.log(await app.service.user.instance().getName()); // Mr. Handsome
 })();
 ```
@@ -201,9 +202,9 @@ local module (and the local singleton), however, it will not affect any remote
 instances, that said, the instance served remotely can still be watched and 
 reloaded on the remote server individually.
 
-In the above example, since the `remote-service` module import `index` module as
+In the above example, since the `remote-service` module imports `app` module as 
 well, which starts the watcher, when the `user` module is changed, the 
-`remote-service` will reload the module as expected, and the `app` calls it 
+`remote-service` will reload the module as expected, and the `index` calls it 
 remotely will get the new result as expected.
 
 For more details, please check the [API documentation](./api.md).

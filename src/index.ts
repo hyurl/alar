@@ -71,7 +71,7 @@ export interface ModuleLoader {
     unload(filename: string): void;
 }
 
-export class ModuleProxy extends ModuleProxyBase<any> {
+export class ModuleProxy extends ModuleProxyBase {
     /**
      * If passed to the `ModuleProxy<T>.instance()`, the method will always 
      * return the local instance.

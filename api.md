@@ -29,8 +29,8 @@ The interface has the following properties and methods:
     no RPC channel is available, by default, `instance()` will fail to the local 
     instance, using this method to disable the default behavior.
 
-**NOTE: IPC/RPC calling will serialize the data via JSON, those data that can**
-**not be serialized will be lost during transmission.**
+**NOTE: IPC/RPC calling will serialize the data via JSON, those data that cannot**
+**be serialized will get lost during transmission.**
 
 **NOTE: properties cannot be accessed remotely, if trying so, `null` or**
 **`undefined` will be returned instead, so it's better to declare properties**
@@ -57,10 +57,20 @@ interface ModuleConstructor<T> {
     `ModuleProxy<T>.instance()`, it will get the returning instance as the 
     singleton instead.
 
+# ModuleProxyBase
+
+```typescript
+class ModuleProxyBase<T = any> implements ModuleProxy<T> { }
+```
+
+This class is internally used to create chained module proxies.
+
 # ModuleProxy (class)
 
 ```typescript
-class ModuleProxy { constructor(name: string, path: string) }
+class ModuleProxy extends ModuleProxyBase {
+    constructor(name: string, path: string);
+}
 ```
 
 This class must be imported in order to create a root module proxy, and the root
@@ -81,8 +91,10 @@ declare global {
 }
 ```
 
-This class has the following properties and methods:
+This class has the following extra properties and methods:
 
+- `local: symbol` If passed to the `ModuleProxy<T>.instance()`, the method will 
+    always return the local instance.
 - `serve(config: string | RpcOptions): Promise<RpcChannel>` Serves an RPC 
     service according to the given configuration.
 - `connect(config: string | RpcOptions): Promise<RpcChannel>` Connects an RPC 
@@ -96,8 +108,9 @@ This class has the following properties and methods:
         [chokidar](https://github.com/paulmillr/chokidar).
 - `setLoader(loader: ModuleLoader): void` Sets a custom loader to resolve the 
     module.
-- `local: symbol` If passed to the `ModuleProxy<T>.instance()`, the method will 
-    always return the local instance.
+
+**NOTE: although `ModuleProxy` inherits from `ModuleProxyBase`, calling the**
+**methods like `create()`, `instance()` should be avoided.**
 
 # ModuleLoader
 
