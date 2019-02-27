@@ -116,7 +116,7 @@ This class has the following extra properties and methods:
 
 ```typescript
 export interface ModuleLoader {
-    extesion: string,
+    extension: string,
     load(path: string): any;
     unload(path: string): void;
 }
@@ -126,7 +126,7 @@ By default, Alar supports JavaScript modules and (TypeScript modules in
 **ts-node**), By setting a custom loader, a ModuleProxy instance can resolve any
 kind of module wanted. (NOTE: The loader must provide cache support.)
 
-- `extesion` Extension name of the module file, by default, it's `.js` (or `.ts`
+- `extension` Extension name of the module file, by default, it's `.js` (or `.ts`
     in ts-node).
 - `load(filename: string): any` Loads module from the given file or cache.
 - `unload(filename: string): void` Unloads the module in cache if the file is 
@@ -138,10 +138,10 @@ var json = new alar.ModuleProxy("json", __dirname + "/json");
 var cache = {};
 
 json.setLoader({
-    extesion: ".json",
+    extension: ".json",
     load(path) {
         return cache[path] || (
-            cache[path] = JSON.parse(fs.readFileSync(path + this.extesion, "utf8"))
+            cache[path] = JSON.parse(fs.readFileSync(path + this.extension, "utf8"))
         );
     },
     unload(path) {

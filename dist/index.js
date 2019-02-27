@@ -28,8 +28,8 @@ class ModuleProxy extends proxy_1.ModuleProxyBase {
         let dir = this.path + path_1.sep;
         if (startsWith(path, dir)) {
             let modPath = path.slice(dir.length), ext = path_1.extname(modPath);
-            if (ext === this.loader.extesion) {
-                modPath = modPath.slice(0, -this.loader.extesion.length);
+            if (ext === this.loader.extension) {
+                modPath = modPath.slice(0, -this.loader.extension.length);
             }
             else if (ext) {
                 return;

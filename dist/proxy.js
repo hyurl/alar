@@ -9,7 +9,7 @@ const js_magic_1 = require("js-magic");
 const util_1 = require("./util");
 const isTsNode = process.execArgv.join(" ").includes("ts-node");
 const defaultLoader = {
-    extesion: isTsNode ? ".ts" : ".js",
+    extension: isTsNode ? ".ts" : ".js",
     load: require,
     unload(filename) {
         delete require.cache[filename];
@@ -25,7 +25,7 @@ let ModuleProxyBase = ModuleProxyBase_1 = class ModuleProxyBase {
         this.path = path_1.normalize(path);
     }
     get exports() {
-        return this.loader.load(this.path + this.loader.extesion);
+        return this.loader.load(this.path + this.loader.extension);
     }
     get proto() {
         let { exports } = this;

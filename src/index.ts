@@ -64,7 +64,7 @@ export interface ModuleLoader {
      * Extension name of the module file, by default, it's `.js` (or `.ts` in 
      * ts-node).
      */
-    extesion: string,
+    extension: string,
     /** Loads module from the given file or cache. */
     load(filename: string): any;
     /** Unloads the module in cache if the file is modified. */
@@ -100,8 +100,8 @@ export class ModuleProxy extends ModuleProxyBase {
             let modPath = path.slice(dir.length),
                 ext = extname(modPath);
 
-            if (ext === this.loader.extesion) {
-                modPath = modPath.slice(0, -this.loader.extesion.length);
+            if (ext === this.loader.extension) {
+                modPath = modPath.slice(0, -this.loader.extension.length);
             } else if (ext) {
                 return;
             }

@@ -128,7 +128,7 @@ describe("Alar ModuleProxy", () => {
         var json = new alar.ModuleProxy("json", __dirname + "/json");
         var cache = {};
         json.setLoader({
-            extesion: ".json",
+            extension: ".json",
             load(filename) {
                 return cache[filename] || (
                     cache[filename] = JSON.parse(fs.readFileSync(filename, "utf8"))

@@ -7,7 +7,7 @@ import { ModuleLoader } from './index';
 
 const isTsNode = process.execArgv.join(" ").includes("ts-node");
 const defaultLoader: ModuleLoader = {
-    extesion: isTsNode ? ".ts" : ".js",
+    extension: isTsNode ? ".ts" : ".js",
     load: require,
     unload(filename) {
         delete require.cache[filename];
@@ -27,7 +27,7 @@ export class ModuleProxyBase<T = any> implements ModuleProxy<T> {
     }
 
     get exports(): any {
-        return this.loader.load(this.path + this.loader.extesion);
+        return this.loader.load(this.path + this.loader.extension);
     }
 
     get proto(): T {
