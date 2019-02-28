@@ -221,4 +221,86 @@ describe("Alar ModuleProxy", () => {
             done();
         });
     });
+
+    it("should subscribe and publish an event as expected", (done) => {
+        awaiter(null, null, null, function* () {
+            var server = yield app.serve(config);
+            var client = yield app.connect(config);
+            var data;
+
+            client.subscribe("set-data", msg => {
+                data = msg;
+            });
+
+            server.publish("set-data", "Mr. World");
+
+            while (!data) {
+                yield sleep(50);
+            }
+
+            assert.strictEqual(data, "Mr. World");
+
+            yield client.close();
+            yield server.close();
+            done();
+        });
+    });
+
+    it("should subscribe and publish multiple events as expected", (done) => {
+        awaiter(null, null, null, function* () {
+            var server = yield app.serve(config);
+            var client = yield app.connect(config);
+            var data;
+            var data1;
+            var data2;
+
+            client.subscribe("set-data", msg => {
+                data = msg;
+            }).subscribe("set-data", msg => {
+                data1 = msg;
+            }).subscribe("set-data-2", msg => {
+                data2 = msg;
+            });
+
+            server.publish("set-data", "Mr. World");
+            server.publish("set-data-2", "Mr. World");
+
+            while (!data || !data1 || !data2) {
+                yield sleep(50);
+            }
+
+            assert.strictEqual(data, "Mr. World");
+            assert.strictEqual(data1, "Mr. World");
+            assert.strictEqual(data2, "Mr. World");
+
+            yield client.close();
+            yield server.close();
+            done();
+        });
+    });
+
+    it("should unsubscribe event handles as expected", (done) => {
+        awaiter(null, null, null, function* () {
+            var server = yield app.serve(config);
+            var client = yield app.connect(config);
+            var listner = msg => null;
+            var listner2 = msg => null;
+
+            client.subscribe("set-data", listner)
+                .subscribe("set-data", listner2)
+                .subscribe("set-data-2", listner)
+                .subscribe("set-data-2", listner2)
+
+            client.unsubscribe("set-data", listner);
+            client.unsubscribe("set-data-2");
+
+            assert.deepStrictEqual(client.events, {
+                "set-data": [listner2]
+            });
+
+            yield client.close();
+            yield server.close();
+            done();
+        });
+    });
 });

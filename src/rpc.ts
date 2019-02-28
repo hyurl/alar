@@ -14,13 +14,16 @@ import {
     remotized
 } from './util';
 
-type Request = [number, number, string, string, ...any[]];
-type Response = [number, number, any];
+type Request = [number, number | string, string, string, ...any[]];
+type Response = [number, number | string, any];
 type Task = {
     resolve: (res: any) => void,
     reject: (err: Error) => void
 };
+type Subscriber = (data: any) => void | Promise<void>;
 enum RpcEvents {
+    CONNECT,
+    BROADCAST,
     REQUEST,
     RESPONSE,
     ERROR,
@@ -91,6 +94,7 @@ export abstract class RpcChannel implements RpcOptions {
 export class RpcServer extends RpcChannel {
     private server: net.Server;
     private registry: { [name: string]: ModuleProxy<any> } = {};
+    private clients = new Set<net.Socket>();
 
     open(): Promise<this> {
         return new Promise(async (resolve, reject) => {
@@ -126,6 +130,8 @@ export class RpcServer extends RpcChannel {
             }).on("connection", socket => {
                 let temp: Buffer[] = [];
 
+                this.clients.add(socket);
+
                 socket.on("error", err => {
                     // When any error occurs, if it's a socket reset error, e.g.
                     // client disconnected unexpected, the server could just 
@@ -133,7 +139,13 @@ export class RpcServer extends RpcChannel {
                     // handle them with a custom handler.
                     if (!isSocketResetError(err) && this.errorHandler) {
                         this.errorHandler(err);
+                    } else if (socket.destroyed) {
+                        socket.emit("close", true);
                     }
+                }).on("end", () => {
+                    socket.emit("close", false);
+                }).on("close", () => {
+                    this.clients.delete(socket);
                 }).on("data", async (buf) => {
                     let msg = receive<Request>(buf, temp);
 
@@ -157,6 +169,10 @@ export class RpcServer extends RpcChannel {
                         }
                     }
                 });
+
+                // Send CONNECT event to notify the client that the connection 
+                // is finished.
+                socket.write(send(RpcEvents.CONNECT));
             });
         });
     }
@@ -176,6 +192,15 @@ export class RpcServer extends RpcChannel {
         this.registry[mod.name] = mod;
         return this;
     }
+
+    /** Publishes data to the corresponding event. */
+    publish(event: string, data: any) {
+        for (let socket of this.clients) {
+            socket.write(send(RpcEvents.BROADCAST, event, data));
+        }
+
+        return this.clients.size > 0;
+    }
 }
 
 export class RpcClient extends RpcChannel {
@@ -191,14 +216,20 @@ export class RpcClient extends RpcChannel {
     private temp: any[] = [];
     private taskId: number = 0;
     private tasks: { [taskId: number]: Task; } = {};
+    private events: { [name: string]: Subscriber[] } = {};
+    private finishConnect: Function;
 
-    private init() {
+    constructor(path: string);
+    constructor(port: number, host?: string);
+    constructor(options: RpcOptions);
+    constructor(options: string | number | RpcOptions, host?: string) {
+        super(<any>options, host);
         this.socket = new net.Socket();
         this.socket.on("error", err => {
             if (this.connected && isSocketResetError(err)) {
                 // If the socket is reset, emit close event so that the 
                 // channel could try to reconnect it automatically.
-                this.socket.emit("close", !!err);
+                this.socket.emit("close", true);
             } else if (this.connected && this.errorHandler) {
                 this.errorHandler(err);
             }
@@ -217,21 +248,42 @@ export class RpcClient extends RpcChannel {
             if (!this.closed && !this.connecting) {
                 this.reconnect(hadError ? this.timeout : 0);
             }
-        }).on("data", buf => {
+        }).on("data", async (buf) => {
             let msg = receive<Response>(buf, this.temp);
 
             for (let [event, taskId, data] of msg) {
-                let task = this.tasks[taskId];
+                let task: Task;
 
-                // If the task exists, when receiving response or error from
-                // the server, resolve or reject them, and remove the task 
-                // immediately.
-                if (task) {
-                    if (event === RpcEvents.RESPONSE) {
-                        task.resolve(data);
-                    } else if (event === RpcEvents.ERROR) {
-                        task.reject(obj2err(data));
-                    }
+                switch (event) {
+                    case RpcEvents.CONNECT:
+                        this.finishConnect();
+                        break;
+
+                    case RpcEvents.BROADCAST:
+                        // If receives the broadcast event, call all the listeners
+                        // bound to the corresponding event. 
+                        let listeners = this.events[taskId] || [];
+
+                        for (let handle of listeners) {
+                            await handle(data);
+                        }
+                        break;
+
+                    // When receiving response from the server, resolve 
+                    // immediately.
+                    case RpcEvents.RESPONSE:
+                        if (task = this.tasks[taskId]) {
+                            task.resolve(data);
+                        }
+                        break;
+
+                    // If any error occurs on the server, it will be delivered
+                    // to the client.
+                    case RpcEvents.ERROR:
+                        if (task = this.tasks[taskId]) {
+                            task.reject(obj2err(data));
+                        }
+                        break;
                 }
             }
         });
@@ -239,9 +291,7 @@ export class RpcClient extends RpcChannel {
 
     open(): Promise<this> {
         return new Promise((resolve, reject) => {
-            if (!this.socket) {
-                this.init();
-            } else if (this.socket.connecting || this.connected || this.closed) {
+            if (this.socket.connecting || this.connected || this.closed) {
                 return resolve(this);
             }
 
@@ -252,7 +302,7 @@ export class RpcClient extends RpcChannel {
                 this.connected = !this.socket.destroyed;
                 this.connecting = false;
                 this.socket.removeListener("error", errorListener);
-                resolve(this);
+                this.finishConnect = () => resolve(this);
             };
             let errorListener = (err: Error) => {
                 this.connecting = false;
@@ -348,6 +398,31 @@ export class RpcClient extends RpcChannel {
         }
 
         return success;
+    }
+
+    /** Subscribes a listener function to the corresponding event. */
+    subscribe(event: string, listener: Subscriber) {
+        if (!this.events[event]) {
+            this.events[event] = [];
+        }
+
+        this.events[event].push(listener);
+
+        return this;
+    }
+
+    /**
+     * Unsubscribes the `listener` or all listeners from the corresponding event.
+     */
+    unsubscribe(event: string, listener?: Subscriber) {
+        if (!listener) {
+            return this.events[event] ? (delete this.events[event]) : false;
+        } else if (this.events[event]) {
+            let i = this.events[event].indexOf(listener);
+            return this.events[event].splice(i, 1).length > 0;
+        } else {
+            return false;
+        }
     }
 
     private async reconnect(timeout = 0) {

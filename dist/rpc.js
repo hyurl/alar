@@ -10,9 +10,11 @@ const sleep = require("sleep-promise");
 const util_1 = require("./util");
 var RpcEvents;
 (function (RpcEvents) {
-    RpcEvents[RpcEvents["REQUEST"] = 0] = "REQUEST";
-    RpcEvents[RpcEvents["RESPONSE"] = 1] = "RESPONSE";
-    RpcEvents[RpcEvents["ERROR"] = 2] = "ERROR";
+    RpcEvents[RpcEvents["CONNECT"] = 0] = "CONNECT";
+    RpcEvents[RpcEvents["BROADCAST"] = 1] = "BROADCAST";
+    RpcEvents[RpcEvents["REQUEST"] = 2] = "REQUEST";
+    RpcEvents[RpcEvents["RESPONSE"] = 3] = "RESPONSE";
+    RpcEvents[RpcEvents["ERROR"] = 4] = "ERROR";
 })(RpcEvents || (RpcEvents = {}));
 class RpcChannel {
     constructor(options, host) {
@@ -52,6 +54,7 @@ class RpcServer extends RpcChannel {
     constructor() {
         super(...arguments);
         this.registry = {};
+        this.clients = new Set();
     }
     open() {
         return new Promise((resolve, reject) => tslib_1.__awaiter(this, void 0, void 0, function* () {
@@ -79,10 +82,18 @@ class RpcServer extends RpcChannel {
                 }
             }).on("connection", socket => {
                 let temp = [];
+                this.clients.add(socket);
                 socket.on("error", err => {
                     if (!isSocketResetError(err) && this.errorHandler) {
                         this.errorHandler(err);
                     }
+                    else if (socket.destroyed) {
+                        socket.emit("close", true);
+                    }
+                }).on("end", () => {
+                    socket.emit("close", false);
+                }).on("close", () => {
+                    this.clients.delete(socket);
                 }).on("data", (buf) => tslib_1.__awaiter(this, void 0, void 0, function* () {
                     let msg = bsp_1.receive(buf, temp);
                     for (let [event, taskId, name, method, ...args] of msg) {
@@ -101,6 +112,7 @@ class RpcServer extends RpcChannel {
                         }
                     }
                 }));
+                socket.write(bsp_1.send(RpcEvents.CONNECT));
             });
         }));
     }
@@ -119,11 +131,17 @@ class RpcServer extends RpcChannel {
         this.registry[mod.name] = mod;
         return this;
     }
+    publish(event, data) {
+        for (let socket of this.clients) {
+            socket.write(bsp_1.send(RpcEvents.BROADCAST, event, data));
+        }
+        return this.clients.size > 0;
+    }
 }
 exports.RpcServer = RpcServer;
 class RpcClient extends RpcChannel {
-    constructor() {
-        super(...arguments);
+    constructor(options, host) {
+        super(options, host);
         this.connecting = false;
         this.connected = false;
         this.closed = false;
@@ -132,12 +150,11 @@ class RpcClient extends RpcChannel {
         this.temp = [];
         this.taskId = 0;
         this.tasks = {};
-    }
-    init() {
+        this.events = {};
         this.socket = new net.Socket();
         this.socket.on("error", err => {
             if (this.connected && isSocketResetError(err)) {
-                this.socket.emit("close", !!err);
+                this.socket.emit("close", true);
             }
             else if (this.connected && this.errorHandler) {
                 this.errorHandler(err);
@@ -152,27 +169,37 @@ class RpcClient extends RpcChannel {
             if (!this.closed && !this.connecting) {
                 this.reconnect(hadError ? this.timeout : 0);
             }
-        }).on("data", buf => {
+        }).on("data", (buf) => tslib_1.__awaiter(this, void 0, void 0, function* () {
             let msg = bsp_1.receive(buf, this.temp);
             for (let [event, taskId, data] of msg) {
-                let task = this.tasks[taskId];
-                if (task) {
-                    if (event === RpcEvents.RESPONSE) {
-                        task.resolve(data);
-                    }
-                    else if (event === RpcEvents.ERROR) {
-                        task.reject(util_1.obj2err(data));
-                    }
+                let task;
+                switch (event) {
+                    case RpcEvents.CONNECT:
+                        this.finishConnect();
+                        break;
+                    case RpcEvents.BROADCAST:
+                        let listeners = this.events[taskId] || [];
+                        for (let handle of listeners) {
+                            yield handle(data);
+                        }
+                        break;
+                    case RpcEvents.RESPONSE:
+                        if (task = this.tasks[taskId]) {
+                            task.resolve(data);
+                        }
+                        break;
+                    case RpcEvents.ERROR:
+                        if (task = this.tasks[taskId]) {
+                            task.reject(util_1.obj2err(data));
+                        }
+                        break;
                 }
             }
-        });
+        }));
     }
     open() {
         return new Promise((resolve, reject) => {
-            if (!this.socket) {
-                this.init();
-            }
-            else if (this.socket.connecting || this.connected || this.closed) {
+            if (this.socket.connecting || this.connected || this.closed) {
                 return resolve(this);
             }
             this.connecting = true;
@@ -181,7 +208,7 @@ class RpcClient extends RpcChannel {
                 this.connected = !this.socket.destroyed;
                 this.connecting = false;
                 this.socket.removeListener("error", errorListener);
-                resolve(this);
+                this.finishConnect = () => resolve(this);
             };
             let errorListener = (err) => {
                 this.connecting = false;
@@ -248,6 +275,25 @@ class RpcClient extends RpcChannel {
             }
         }
         return success;
+    }
+    subscribe(event, listener) {
+        if (!this.events[event]) {
+            this.events[event] = [];
+        }
+        this.events[event].push(listener);
+        return this;
+    }
+    unsubscribe(event, listener) {
+        if (!listener) {
+            return this.events[event] ? (delete this.events[event]) : false;
+        }
+        else if (this.events[event]) {
+            let i = this.events[event].indexOf(listener);
+            return this.events[event].splice(i, 1).length > 0;
+        }
+        else {
+            return false;
+        }
     }
     reconnect(timeout = 0) {
         return tslib_1.__awaiter(this, void 0, void 0, function* () {

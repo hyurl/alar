@@ -202,6 +202,9 @@ class RpcServer extends RpcChannel { }
 
 The server implementation of the RPC channel.
 
+- `publish(event: string, data: any): boolean` Publishes data to the 
+    corresponding event.
+
 # RpcClient
 
 ```typescript
@@ -215,3 +218,22 @@ The client implementation of the RPC channel.
 - `closed: boolean` Whether the channel is closed.
 - `pause(): boolean`  Pauses the channel and redirect traffic to other channels.
 - `resume(): boolean` Resumes the channel and continue handling traffic.
+- `subscribe(event: string, listener: Subscriber): this` Subscribes a listener 
+    function to the corresponding event.
+- `unsubscribe(event: string, listener?: Subscriber): boolean` Unsubscribes the 
+    `listener` or all listeners from the corresponding event.
+
+The `Subscriber` is a type of
+
+```typescript
+type Subscriber = (data: any) => void | Promise<void>;
+```
+
+All listeners bound to an event will be called sequentially in an `async` 
+function scope.
+
+## Pub-Sub Model between the server and clients
+
+When the server calls the `publish` method, any client `subscribe`s to the event
+will invokes the bound listeners, this mechanism is usually used for the server
+broadcasting data to connected clients.
