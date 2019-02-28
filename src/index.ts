@@ -5,7 +5,14 @@ import { RpcOptions, RpcChannel, RpcServer, RpcClient } from './rpc';
 import { ModuleProxyBase } from "./proxy";
 import { local } from './util';
 
-export { RpcOptions, RpcChannel, RpcServer, RpcClient, FSWatcher };
+export {
+    ModuleProxyBase,
+    RpcOptions,
+    RpcChannel,
+    RpcServer,
+    RpcClient,
+    FSWatcher
+};
 
 // Auto-Load And Remote.
 
@@ -34,7 +41,6 @@ declare global {
         create(arg1: R1, arg2: R2, arg3: R3): T;
         create(arg1: R1, arg2: R2, arg3: R3, arg4: R4): T;
         create(arg1: R1, arg2: R2, arg3: R3, arg4: R4, arg5: R5): T;
-        create(...args: any[]): T;
 
         /**
          * Gets the local singleton or a remote instance of the module, if 

@@ -20,7 +20,6 @@ The interface has the following properties and methods:
     - `create(arg1: R1, arg2: R2, arg3: R3): T`
     - `create(arg1: R1, arg2: R2, arg3: R3, arg4: R4): T`
     - `create(arg1: R1, arg2: R2, arg3: R3, arg4: R4, arg5: R5): T`
-    - `create(...args: any[]): T`
 - `instance(route?: any): T` Gets the local singleton or a remote instance of 
     the module, if connected to one or more remote instances, the module proxy 
     will automatically calculate the `route` and direct the traffic to the 
