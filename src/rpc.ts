@@ -164,15 +164,15 @@ export class RpcServer extends RpcChannel {
                                 data = err2obj(err);
                             }
 
-                            // Send response or error to the client,
-                            socket.write(send(event, taskId, data));
+                            // Send response or error to the client.
+                            this.dispatch(socket, event, taskId, data);
                         }
                     }
                 });
 
                 // Send CONNECT event to notify the client that the connection 
                 // is finished.
-                socket.write(send(RpcEvents.CONNECT));
+                this.dispatch(socket, RpcEvents.CONNECT);
             });
         });
     }
@@ -196,10 +196,16 @@ export class RpcServer extends RpcChannel {
     /** Publishes data to the corresponding event. */
     publish(event: string, data: any) {
         for (let socket of this.clients) {
-            socket.write(send(RpcEvents.BROADCAST, event, data));
+            this.dispatch(socket, RpcEvents.BROADCAST, event, data);
         }
 
         return this.clients.size > 0;
+    }
+
+    private dispatch(socket: net.Socket, ...data: any[]) {
+        if (!socket.destroyed && socket.writable) {
+            socket.write(send(...data));
+        }
     }
 }
 
@@ -440,7 +446,7 @@ export class RpcClient extends RpcChannel {
     }
 
     private send(...data: Request) {
-        if (this.socket && !this.socket.destroyed) {
+        if (this.socket && !this.socket.destroyed && this.socket.writable) {
             this.socket.write(send(...data));
         }
     }

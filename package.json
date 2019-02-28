@@ -1,6 +1,6 @@
 {
   "name": "alar",
-  "version": "3.1.0",
+  "version": "3.1.1",
   "description": "Auto-Load And Remote.",
   "main": "dist/index.js",
   "types": "src/index.ts",
@@ -29,9 +29,9 @@
   "homepage": "https://github.com/hyurl/alar#readme",
   "dependencies": {
     "@types/chokidar": "^1.7.5",
-    "@types/fs-extra": "^5.0.4",
-    "bsp": "^0.2.0",
-    "chokidar": "^2.0.4",
+    "@types/fs-extra": "^5.0.5",
+    "bsp": "^0.2.1",
+    "chokidar": "^2.1.2",
     "fs-extra": "^7.0.1",
     "is-socket-reset-error": "^0.1.1",
     "js-magic": "^1.0.0",
@@ -43,7 +43,7 @@
   },
   "devDependencies": {
     "@types/lodash": "^4.14.121",
-    "@types/node": "^10.12.18",
+    "@types/node": "^10.12.27",
     "@types/object-hash": "^1.2.0",
     "mocha": "^5.2.0",
     "source-map-support": "^0.5.10"

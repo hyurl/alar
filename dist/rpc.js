@@ -108,11 +108,11 @@ class RpcServer extends RpcChannel {
                                 event = RpcEvents.ERROR;
                                 data = util_1.err2obj(err);
                             }
-                            socket.write(bsp_1.send(event, taskId, data));
+                            this.dispatch(socket, event, taskId, data);
                         }
                     }
                 }));
-                socket.write(bsp_1.send(RpcEvents.CONNECT));
+                this.dispatch(socket, RpcEvents.CONNECT);
             });
         }));
     }
@@ -133,9 +133,14 @@ class RpcServer extends RpcChannel {
     }
     publish(event, data) {
         for (let socket of this.clients) {
-            socket.write(bsp_1.send(RpcEvents.BROADCAST, event, data));
+            this.dispatch(socket, RpcEvents.BROADCAST, event, data);
         }
         return this.clients.size > 0;
+    }
+    dispatch(socket, ...data) {
+        if (!socket.destroyed && socket.writable) {
+            socket.write(bsp_1.send(...data));
+        }
     }
 }
 exports.RpcServer = RpcServer;
@@ -311,7 +316,7 @@ class RpcClient extends RpcChannel {
         });
     }
     send(...data) {
-        if (this.socket && !this.socket.destroyed) {
+        if (this.socket && !this.socket.destroyed && this.socket.writable) {
             this.socket.write(bsp_1.send(...data));
         }
     }
