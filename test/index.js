@@ -201,6 +201,7 @@ describe("Alar ModuleProxy", () => {
 
             yield client.close();
             proc.kill();
+            yield sleep(100);
             done();
         });
     });
