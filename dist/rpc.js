@@ -10,18 +10,18 @@ const sleep = require("sleep-promise");
 const util_1 = require("./util");
 var RpcEvents;
 (function (RpcEvents) {
-    RpcEvents[RpcEvents["CONNECT"] = 0] = "CONNECT";
-    RpcEvents[RpcEvents["BROADCAST"] = 1] = "BROADCAST";
-    RpcEvents[RpcEvents["REQUEST"] = 2] = "REQUEST";
-    RpcEvents[RpcEvents["RESPONSE"] = 3] = "RESPONSE";
-    RpcEvents[RpcEvents["ERROR"] = 4] = "ERROR";
+    RpcEvents[RpcEvents["HANDSHAKE"] = 0] = "HANDSHAKE";
+    RpcEvents[RpcEvents["CONNECT"] = 1] = "CONNECT";
+    RpcEvents[RpcEvents["BROADCAST"] = 2] = "BROADCAST";
+    RpcEvents[RpcEvents["REQUEST"] = 3] = "REQUEST";
+    RpcEvents[RpcEvents["RESPONSE"] = 4] = "RESPONSE";
+    RpcEvents[RpcEvents["ERROR"] = 5] = "ERROR";
 })(RpcEvents || (RpcEvents = {}));
 class RpcChannel {
     constructor(options, host) {
         this.host = "0.0.0.0";
         this.port = 9000;
         this.path = "";
-        this.timeout = 5000;
         if (typeof options === "object") {
             Object.assign(this, options);
         }
@@ -54,7 +54,7 @@ class RpcServer extends RpcChannel {
     constructor() {
         super(...arguments);
         this.registry = {};
-        this.clients = new Set();
+        this.clients = new Map();
     }
     open() {
         return new Promise((resolve, reject) => tslib_1.__awaiter(this, void 0, void 0, function* () {
@@ -82,7 +82,6 @@ class RpcServer extends RpcChannel {
                 }
             }).on("connection", socket => {
                 let temp = [];
-                this.clients.add(socket);
                 socket.on("error", err => {
                     if (!isSocketResetError(err) && this.errorHandler) {
                         this.errorHandler(err);
@@ -93,11 +92,20 @@ class RpcServer extends RpcChannel {
                 }).on("end", () => {
                     socket.emit("close", false);
                 }).on("close", () => {
-                    this.clients.delete(socket);
+                    for (let [id, _socket] of this.clients) {
+                        if (Object.is(_socket, socket)) {
+                            this.clients.delete(id);
+                            break;
+                        }
+                    }
                 }).on("data", (buf) => tslib_1.__awaiter(this, void 0, void 0, function* () {
                     let msg = bsp_1.receive(buf, temp);
                     for (let [event, taskId, name, method, ...args] of msg) {
-                        if (event === RpcEvents.REQUEST) {
+                        if (event === RpcEvents.HANDSHAKE) {
+                            this.clients.set(taskId, socket);
+                            this.dispatch(socket, RpcEvents.CONNECT);
+                        }
+                        else if (event === RpcEvents.REQUEST) {
                             let event, data;
                             try {
                                 let ins = this.registry[name].instance(util_1.local);
@@ -112,7 +120,6 @@ class RpcServer extends RpcChannel {
                         }
                     }
                 }));
-                this.dispatch(socket, RpcEvents.CONNECT);
             });
         }));
     }
@@ -131,11 +138,22 @@ class RpcServer extends RpcChannel {
         this.registry[mod.name] = mod;
         return this;
     }
-    publish(event, data) {
-        for (let socket of this.clients) {
-            this.dispatch(socket, RpcEvents.BROADCAST, event, data);
+    publish(event, data, clients) {
+        let sent = false;
+        let socket;
+        let targets = clients || this.clients.keys();
+        for (let id of targets) {
+            if (socket = this.clients.get(id)) {
+                this.dispatch(socket, RpcEvents.BROADCAST, event, data);
+                sent = true;
+            }
         }
-        return this.clients.size > 0;
+        return sent;
+    }
+    getClients() {
+        let clients;
+        this.clients.forEach((_, id) => clients.push(id));
+        return clients;
     }
     dispatch(socket, ...data) {
         if (!socket.destroyed && socket.writable) {
@@ -156,6 +174,8 @@ class RpcClient extends RpcChannel {
         this.taskId = 0;
         this.tasks = {};
         this.events = {};
+        this.id = this.id || Math.random().toString(16).slice(2);
+        this.timeout = this.timeout || 5000;
         this.socket = new net.Socket();
         this.socket.on("error", err => {
             if (this.connected && isSocketResetError(err)) {
@@ -214,6 +234,7 @@ class RpcClient extends RpcChannel {
                 this.connecting = false;
                 this.socket.removeListener("error", errorListener);
                 this.finishConnect = () => resolve(this);
+                this.send(RpcEvents.HANDSHAKE, this.id);
             };
             let errorListener = (err) => {
                 this.connecting = false;

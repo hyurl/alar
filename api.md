@@ -94,9 +94,9 @@ This class has the following extra properties and methods:
 
 - `local: symbol` If passed to the `ModuleProxy<T>.instance()`, the method will 
     always return the local instance.
-- `serve(config: string | RpcOptions): Promise<RpcChannel>` Serves an RPC 
+- `serve(config: string | RpcOptions): Promise<RpcServer>` Serves an RPC 
     service according to the given configuration.
-- `connect(config: string | RpcOptions): Promise<RpcChannel>` Connects an RPC 
+- `connect(config: string | ClientOptions): Promise<RpcClient>` Connects an RPC 
     service according to the given configuration.
 - `resolve(path: string): string` Resolves the given path to a module name.
 - `watch(listener?: (event: "change" | "unlink", filename: string)): FSWatcher` 
@@ -156,20 +156,13 @@ interface RpcOptions {
     host?: string;
     port?: number;
     path?: string;
-    timeout?: number;
 }
 ```
 
 If `path` is provided (equivalent to `ModuleProxy.serve(config: string)` and 
 `ModuleProxy.connect(config: string)`), the RPC channel will be bound to an IPC 
 channel. Otherwise, the RPC channel will be bound a network channel according to
-the `host` and `port`. By default `timeout` is set `5000`ms, works both in 
-connection and IPC requests.
-
-The channel provides internal support for re-connection, if a remote service is 
-disconnected e.g. the server shutdown (even manually), the traffic will be 
-redirected to other online services, and the client will try to reconnect 
-repeatedly in the background (according to `timeout`).
+the `host` and `port`.
 
 # RpcChannel
 
@@ -201,13 +194,34 @@ class RpcServer extends RpcChannel { }
 
 The server implementation of the RPC channel.
 
-- `publish(event: string, data: any): boolean` Publishes data to the 
-    corresponding event.
+- `publish(event: string, data: any, clients?: string[]): boolean` Publishes 
+    data to the corresponding event, if `clients` are provided, the event will 
+    only be emitted to them.
+- `getClients(): string[]` Returns all IDs of clients that connected to the 
+    server.
+
+# ClientOptions
+
+```typescript
+interface ClientOptions extends RpcOptions {
+    id?: string;
+    timeout?: number;
+}
+```
+
+The `id` is used for the server publishing events to specified clients, if not 
+provided, a random string will be generated. By default `timeout` is set 
+`5000`ms, works both in connection and IPC requests.
+
+The client provides internal support of re-connection, if a remote service is 
+disconnected e.g. the server shutdown (even manually), the traffic will be 
+redirected to other online services, and the client will try to reconnect 
+repeatedly in the background (according to `timeout`).
 
 # RpcClient
 
 ```typescript
-class RpcClient extends RpcChannel { }
+class RpcClient extends RpcChannel implements ClientOptions { }
 ```
 
 The client implementation of the RPC channel.

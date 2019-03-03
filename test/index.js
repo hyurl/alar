@@ -304,4 +304,30 @@ describe("Alar ModuleProxy", () => {
             done();
         });
     });
+
+    it("should publish an event to specified clients as expected", (done) => {
+        awaiter(null, null, null, function* () {
+            var server = yield app.serve(config);
+            var client = yield app.connect(Object.assign({}, config, { id: "abc" }));
+            var data;
+
+            assert.strictEqual(client.id, "abc");
+
+            client.subscribe("set-data", msg => {
+                data = msg;
+            });
+
+            server.publish("set-data", "Mr. World", ["abc"]);
+
+            while (!data) {
+                yield sleep(50);
+            }
+
+            assert.strictEqual(data, "Mr. World");
+
+            yield client.close();
+            yield server.close();
+            done();
+        });
+    });
 });

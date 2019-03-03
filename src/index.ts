@@ -1,7 +1,7 @@
 import { extname, sep } from "path";
 import { watch, FSWatcher } from "chokidar";
 import startsWith = require("lodash/startsWith");
-import { RpcOptions, RpcChannel, RpcServer, RpcClient } from './rpc';
+import { RpcOptions, RpcChannel, RpcServer, RpcClient, ClientOptions } from './rpc';
 import { ModuleProxyBase } from "./proxy";
 import { local } from './util';
 
@@ -11,6 +11,7 @@ export {
     RpcChannel,
     RpcServer,
     RpcClient,
+    ClientOptions,
     FSWatcher
 };
 
@@ -94,7 +95,7 @@ export class ModuleProxy extends ModuleProxyBase {
     }
 
     /** Connects an RPC service according to the given configuration. */
-    connect(config: string | RpcOptions): Promise<RpcClient> {
+    connect(config: string | ClientOptions): Promise<RpcClient> {
         return new RpcClient(<any>config).open();
     }
 

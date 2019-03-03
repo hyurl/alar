@@ -14,7 +14,7 @@ import {
     remotized
 } from './util';
 
-type Request = [number, number | string, string, string, ...any[]];
+type Request = [number, number | string, string?, string?, ...any[]];
 type Response = [number, number | string, any];
 type Task = {
     resolve: (res: any) => void,
@@ -22,6 +22,7 @@ type Task = {
 };
 type Subscriber = (data: any) => void | Promise<void>;
 enum RpcEvents {
+    HANDSHAKE,
     CONNECT,
     BROADCAST,
     REQUEST,
@@ -30,10 +31,15 @@ enum RpcEvents {
 }
 
 export interface RpcOptions {
+    [x: string]: any;
     host?: string;
     port?: number;
     path?: string;
+}
+
+export interface ClientOptions extends RpcOptions {
     timeout?: number;
+    id?: string;
 }
 
 /** An RPC channel that allows modules to communicate remotely. */
@@ -41,7 +47,6 @@ export abstract class RpcChannel implements RpcOptions {
     host = "0.0.0.0";
     port = 9000;
     path = "";
-    timeout = 5000;
     protected errorHandler: (err: Error) => void;
 
     constructor(path: string);
@@ -94,7 +99,7 @@ export abstract class RpcChannel implements RpcOptions {
 export class RpcServer extends RpcChannel {
     private server: net.Server;
     private registry: { [name: string]: ModuleProxy<any> } = {};
-    private clients = new Set<net.Socket>();
+    private clients = new Map<string, net.Socket>();
 
     open(): Promise<this> {
         return new Promise(async (resolve, reject) => {
@@ -130,8 +135,6 @@ export class RpcServer extends RpcChannel {
             }).on("connection", socket => {
                 let temp: Buffer[] = [];
 
-                this.clients.add(socket);
-
                 socket.on("error", err => {
                     // When any error occurs, if it's a socket reset error, e.g.
                     // client disconnected unexpected, the server could just 
@@ -145,12 +148,22 @@ export class RpcServer extends RpcChannel {
                 }).on("end", () => {
                     socket.emit("close", false);
                 }).on("close", () => {
-                    this.clients.delete(socket);
+                    for (let [id, _socket] of this.clients) {
+                        if (Object.is(_socket, socket)) {
+                            this.clients.delete(id);
+                            break;
+                        }
+                    }
                 }).on("data", async (buf) => {
                     let msg = receive<Request>(buf, temp);
 
                     for (let [event, taskId, name, method, ...args] of msg) {
-                        if (event === RpcEvents.REQUEST) {
+                        if (event === RpcEvents.HANDSHAKE) {
+                            this.clients.set(<string>taskId, socket);
+                            // Send CONNECT event to notify the client that the 
+                            // connection is finished.
+                            this.dispatch(socket, RpcEvents.CONNECT);
+                        } else if (event === RpcEvents.REQUEST) {
                             let event: RpcEvents, data: any;
 
                             try {
@@ -169,10 +182,6 @@ export class RpcServer extends RpcChannel {
                         }
                     }
                 });
-
-                // Send CONNECT event to notify the client that the connection 
-                // is finished.
-                this.dispatch(socket, RpcEvents.CONNECT);
             });
         });
     }
@@ -193,13 +202,31 @@ export class RpcServer extends RpcChannel {
         return this;
     }
 
-    /** Publishes data to the corresponding event. */
-    publish(event: string, data: any) {
-        for (let socket of this.clients) {
-            this.dispatch(socket, RpcEvents.BROADCAST, event, data);
+    /**
+     * Publishes data to the corresponding event, if `clients` are provided, the
+     * event will only be emitted to them.
+     * 
+     */
+    publish(event: string, data: any, clients?: string[]) {
+        let sent = false;
+        let socket: net.Socket;
+        let targets = clients || this.clients.keys();
+
+        for (let id of targets) {
+            if (socket = this.clients.get(id)) {
+                this.dispatch(socket, RpcEvents.BROADCAST, event, data);
+                sent = true;
+            }
         }
 
-        return this.clients.size > 0;
+        return sent;
+    }
+
+    /** Returns all IDs of clients that connected to the server. */
+    getClients(): string[] {
+        let clients: string[];
+        this.clients.forEach((_, id) => clients.push(id));
+        return clients;
     }
 
     private dispatch(socket: net.Socket, ...data: any[]) {
@@ -209,7 +236,9 @@ export class RpcServer extends RpcChannel {
     }
 }
 
-export class RpcClient extends RpcChannel {
+export class RpcClient extends RpcChannel implements ClientOptions {
+    id: string;
+    timeout: number;
     /** Whether the channel is in connecting state. */
     connecting = false;
     /** Whether the channel is connected. */
@@ -230,6 +259,8 @@ export class RpcClient extends RpcChannel {
     constructor(options: RpcOptions);
     constructor(options: string | number | RpcOptions, host?: string) {
         super(<any>options, host);
+        this.id = this.id || Math.random().toString(16).slice(2);
+        this.timeout = this.timeout || 5000;
         this.socket = new net.Socket();
         this.socket.on("error", err => {
             if (this.connected && isSocketResetError(err)) {
@@ -309,6 +340,7 @@ export class RpcClient extends RpcChannel {
                 this.connecting = false;
                 this.socket.removeListener("error", errorListener);
                 this.finishConnect = () => resolve(this);
+                this.send(RpcEvents.HANDSHAKE, this.id);
             };
             let errorListener = (err: Error) => {
                 this.connecting = false;
