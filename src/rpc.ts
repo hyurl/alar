@@ -142,8 +142,6 @@ export class RpcServer extends RpcChannel {
                     // handle them with a custom handler.
                     if (!isSocketResetError(err) && this.errorHandler) {
                         this.errorHandler(err);
-                    } else if (socket.destroyed) {
-                        socket.emit("close", true);
                     }
                 }).on("end", () => {
                     socket.emit("close", false);
@@ -263,11 +261,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
         this.timeout = this.timeout || 5000;
         this.socket = new net.Socket();
         this.socket.on("error", err => {
-            if (this.connected && isSocketResetError(err)) {
-                // If the socket is reset, emit close event so that the 
-                // channel could try to reconnect it automatically.
-                this.socket.emit("close", true);
-            } else if (this.connected && this.errorHandler) {
+            if (this.connected && !isSocketResetError(err) && this.errorHandler) {
                 this.errorHandler(err);
             }
         }).on("end", () => {
@@ -282,7 +276,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
             this.connected = false;
             this.pause();
 
-            if (!this.closed && !this.connecting) {
+            if (!this.closed && !this.connecting && this.initiated) {
                 this.reconnect(hadError ? this.timeout : 0);
             }
         }).on("data", async (buf) => {
@@ -336,10 +330,12 @@ export class RpcClient extends RpcChannel implements ClientOptions {
 
             let listener = () => {
                 this.initiated = true;
-                this.connected = !this.socket.destroyed;
                 this.connecting = false;
                 this.socket.removeListener("error", errorListener);
-                this.finishConnect = () => resolve(this);
+                this.finishConnect = () => {
+                    this.connected = true;
+                    resolve(this);
+                };
                 this.send(RpcEvents.HANDSHAKE, this.id);
             };
             let errorListener = (err: Error) => {
@@ -350,11 +346,6 @@ export class RpcClient extends RpcChannel implements ClientOptions {
                 // got conflicted and one of the them finishes connect 
                 // before others.
                 if (this.initiated) {
-                    // If `defer` is enabled, when connection failed, 
-                    // the channel will resolve immediately without error,
-                    // and emit close event so that the channel could try to 
-                    // reconnect it automatically.
-                    this.socket.emit("close", !!err);
                     resolve(this);
                 } else {
                     reject(err);

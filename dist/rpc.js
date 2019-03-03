@@ -86,9 +86,6 @@ class RpcServer extends RpcChannel {
                     if (!isSocketResetError(err) && this.errorHandler) {
                         this.errorHandler(err);
                     }
-                    else if (socket.destroyed) {
-                        socket.emit("close", true);
-                    }
                 }).on("end", () => {
                     socket.emit("close", false);
                 }).on("close", () => {
@@ -178,10 +175,7 @@ class RpcClient extends RpcChannel {
         this.timeout = this.timeout || 5000;
         this.socket = new net.Socket();
         this.socket.on("error", err => {
-            if (this.connected && isSocketResetError(err)) {
-                this.socket.emit("close", true);
-            }
-            else if (this.connected && this.errorHandler) {
+            if (this.connected && !isSocketResetError(err) && this.errorHandler) {
                 this.errorHandler(err);
             }
         }).on("end", () => {
@@ -191,7 +185,7 @@ class RpcClient extends RpcChannel {
         }).on("close", hadError => {
             this.connected = false;
             this.pause();
-            if (!this.closed && !this.connecting) {
+            if (!this.closed && !this.connecting && this.initiated) {
                 this.reconnect(hadError ? this.timeout : 0);
             }
         }).on("data", (buf) => tslib_1.__awaiter(this, void 0, void 0, function* () {
@@ -230,17 +224,18 @@ class RpcClient extends RpcChannel {
             this.connecting = true;
             let listener = () => {
                 this.initiated = true;
-                this.connected = !this.socket.destroyed;
                 this.connecting = false;
                 this.socket.removeListener("error", errorListener);
-                this.finishConnect = () => resolve(this);
+                this.finishConnect = () => {
+                    this.connected = true;
+                    resolve(this);
+                };
                 this.send(RpcEvents.HANDSHAKE, this.id);
             };
             let errorListener = (err) => {
                 this.connecting = false;
                 this.socket.removeListener("connect", listener);
                 if (this.initiated) {
-                    this.socket.emit("close", !!err);
                     resolve(this);
                 }
                 else {
