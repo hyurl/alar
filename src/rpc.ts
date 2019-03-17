@@ -2,6 +2,7 @@ import * as net from "net";
 import * as path from "path";
 import * as fs from "fs-extra";
 import { send, receive } from "bsp";
+import { BiMap } from "advanced-collections";
 import { ThenableAsyncGenerator } from "thenable-generator";
 import isSocketResetError = require("is-socket-reset-error");
 import sleep = require("sleep-promise");
@@ -16,6 +17,8 @@ import {
     remotized
 } from './util';
 
+const authorized = Symbol("authorized");
+const lastActiveTime = Symbol("lastActiveTime");
 type Request = [number, number | string, string?, string?, ...any[]];
 type Response = [number, number | string, any];
 type Task = {
@@ -110,9 +113,7 @@ export class RpcServer extends RpcChannel {
     readonly timeout: number;
     protected server: net.Server;
     protected registry: { [name: string]: ModuleProxy<any> } = {};
-    protected clients = new Map<string, net.Socket>();
-    protected activeClients = new Map<net.Socket, number>();
-    protected authorizedClients = new Map<net.Socket, boolean>();
+    protected clients = new BiMap<string, net.Socket>();
     protected suspendedTasks = new Map<net.Socket, {
         [taskId: number]: ThenableAsyncGenerator;
     }>();
@@ -120,8 +121,8 @@ export class RpcServer extends RpcChannel {
         let now = Date.now();
         let timeout = this.pingTimeout + 100;
 
-        for (let [socket, activeTime] of this.activeClients) {
-            if (now - activeTime >= timeout) {
+        for (let [, socket] of this.clients) {
+            if (now - socket[lastActiveTime] >= timeout) {
                 this.refuceConnect(
                     socket,
                     "Connection reset due to long-time inactive"
@@ -209,9 +210,7 @@ export class RpcServer extends RpcChannel {
         let timeout = this.pingTimeout + 100;
 
         for (let [id, socket] of this.clients) {
-            let activeTime = this.activeClients.get(socket);
-
-            if (activeTime && now - activeTime < timeout) {
+            if (now - socket[lastActiveTime] < timeout) {
                 clients.push(id);
             }
         }
@@ -243,29 +242,22 @@ export class RpcServer extends RpcChannel {
         }).on("end", () => {
             socket.emit("close", false);
         }).on("close", () => {
-            for (let [id, _socket] of this.clients) {
-                if (Object.is(_socket, socket)) {
-                    this.clients.delete(id);
-                    this.activeClients.delete(socket);
-                    this.authorizedClients.delete(socket);
-                    break;
-                }
-            }
+            this.clients.deleteValue(socket);
         }).on("data", async (buf) => {
             let msg = receive<Request>(buf, temp);
 
             for (let [event, taskId, name, method, ...args] of msg) {
-                if (event !== RpcEvents.HANDSHAKE && !this.authorizedClients.get(socket)) {
+                if (event !== RpcEvents.HANDSHAKE && !socket[authorized]) {
                     return this.refuceConnect(socket);
                 } else {
-                    this.activeClients.set(socket, Date.now());
+                    socket[lastActiveTime] = Date.now();
                 }
 
                 switch (event) {
                     case RpcEvents.HANDSHAKE:
                         if ((!name && !this.secret) || name === this.secret) {
+                            socket[authorized] = true;
                             this.clients.set(<string>taskId, socket);
-                            this.authorizedClients.set(socket, true);
                             this.suspendedTasks.set(socket, {});
                             // Send CONNECT event to notify the client that the 
                             // connection is finished.

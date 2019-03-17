@@ -30,6 +30,7 @@
   "dependencies": {
     "@types/chokidar": "^1.7.5",
     "@types/fs-extra": "^5.0.5",
+    "advanced-collections": "^0.1.1",
     "bsp": "^0.2.1",
     "chokidar": "^2.1.2",
     "fs-extra": "^7.0.1",

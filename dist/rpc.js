@@ -5,11 +5,14 @@ const net = require("net");
 const path = require("path");
 const fs = require("fs-extra");
 const bsp_1 = require("bsp");
+const advanced_collections_1 = require("advanced-collections");
 const thenable_generator_1 = require("thenable-generator");
 const isSocketResetError = require("is-socket-reset-error");
 const sleep = require("sleep-promise");
 const sequid_1 = require("sequid");
 const util_1 = require("./util");
+const authorized = Symbol("authorized");
+const lastActiveTime = Symbol("lastActiveTime");
 var RpcEvents;
 (function (RpcEvents) {
     RpcEvents[RpcEvents["HANDSHAKE"] = 0] = "HANDSHAKE";
@@ -61,15 +64,13 @@ class RpcServer extends RpcChannel {
     constructor() {
         super(...arguments);
         this.registry = {};
-        this.clients = new Map();
-        this.activeClients = new Map();
-        this.authorizedClients = new Map();
+        this.clients = new advanced_collections_1.BiMap();
         this.suspendedTasks = new Map();
         this.gcTimer = setInterval(() => {
             let now = Date.now();
             let timeout = this.pingTimeout + 100;
-            for (let [socket, activeTime] of this.activeClients) {
-                if (now - activeTime >= timeout) {
+            for (let [, socket] of this.clients) {
+                if (now - socket[lastActiveTime] >= timeout) {
                     this.refuceConnect(socket, "Connection reset due to long-time inactive");
                 }
             }
@@ -135,8 +136,7 @@ class RpcServer extends RpcChannel {
         let now = Date.now();
         let timeout = this.pingTimeout + 100;
         for (let [id, socket] of this.clients) {
-            let activeTime = this.activeClients.get(socket);
-            if (activeTime && now - activeTime < timeout) {
+            if (now - socket[lastActiveTime] < timeout) {
                 clients.push(id);
             }
         }
@@ -159,28 +159,21 @@ class RpcServer extends RpcChannel {
         }).on("end", () => {
             socket.emit("close", false);
         }).on("close", () => {
-            for (let [id, _socket] of this.clients) {
-                if (Object.is(_socket, socket)) {
-                    this.clients.delete(id);
-                    this.activeClients.delete(socket);
-                    this.authorizedClients.delete(socket);
-                    break;
-                }
-            }
+            this.clients.deleteValue(socket);
         }).on("data", (buf) => tslib_1.__awaiter(this, void 0, void 0, function* () {
             let msg = bsp_1.receive(buf, temp);
             for (let [event, taskId, name, method, ...args] of msg) {
-                if (event !== RpcEvents.HANDSHAKE && !this.authorizedClients.get(socket)) {
+                if (event !== RpcEvents.HANDSHAKE && !socket[authorized]) {
                     return this.refuceConnect(socket);
                 }
                 else {
-                    this.activeClients.set(socket, Date.now());
+                    socket[lastActiveTime] = Date.now();
                 }
                 switch (event) {
                     case RpcEvents.HANDSHAKE:
                         if ((!name && !this.secret) || name === this.secret) {
+                            socket[authorized] = true;
                             this.clients.set(taskId, socket);
-                            this.authorizedClients.set(socket, true);
                             this.suspendedTasks.set(socket, {});
                             this.dispatch(socket, RpcEvents.CONNECT, name);
                         }
