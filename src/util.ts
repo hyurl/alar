@@ -57,6 +57,8 @@ export function getInstance<T>(mod: ModuleProxy<T>, instantiate = true): T {
 }
 
 export function err2obj(err: ErrorObject): ErrorObject {
+    if (!(err instanceof Error)) return err;
+
     let props = ["name", "message", "stack"];
     return Object.assign({}, pick(err, props), omit(err, props)) as any;
 }

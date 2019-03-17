@@ -2,8 +2,10 @@ import * as net from "net";
 import * as path from "path";
 import * as fs from "fs-extra";
 import { send, receive } from "bsp";
+import { ThenableAsyncGenerator } from "thenable-generator";
 import isSocketResetError = require("is-socket-reset-error");
 import sleep = require("sleep-promise");
+import sequid from "sequid";
 import {
     obj2err,
     err2obj,
@@ -17,17 +19,20 @@ import {
 type Request = [number, number | string, string?, string?, ...any[]];
 type Response = [number, number | string, any];
 type Task = {
-    resolve: (res: any) => void,
-    reject: (err: Error) => void
+    resolve?: (data: any) => void,
+    reject?: (err: Error) => void
 };
 type Subscriber = (data: any) => void | Promise<void>;
 enum RpcEvents {
     HANDSHAKE,
     CONNECT,
     BROADCAST,
-    REQUEST,
-    RESPONSE,
-    ERROR,
+    AWAIT,
+    RETURN,
+    YIELD,
+    THROW,
+    PING,
+    PONG
 }
 
 export interface RpcOptions {
@@ -35,18 +40,23 @@ export interface RpcOptions {
     host?: string;
     port?: number;
     path?: string;
+    secret?: string;
+    timeout?: number;
+    pingTimeout?: number;
 }
 
 export interface ClientOptions extends RpcOptions {
-    timeout?: number;
     id?: string;
 }
 
 /** An RPC channel that allows modules to communicate remotely. */
 export abstract class RpcChannel implements RpcOptions {
-    host = "0.0.0.0";
-    port = 9000;
-    path = "";
+    readonly host: string = "0.0.0.0";
+    readonly port: number = 9000;
+    readonly path: string = "";
+    readonly timeout: number = 5000;
+    readonly pingTimeout = 1000 * 30;
+    readonly secret?: string;
     protected errorHandler: (err: Error) => void;
 
     constructor(path: string);
@@ -97,9 +107,28 @@ export abstract class RpcChannel implements RpcOptions {
 }
 
 export class RpcServer extends RpcChannel {
-    private server: net.Server;
-    private registry: { [name: string]: ModuleProxy<any> } = {};
-    private clients = new Map<string, net.Socket>();
+    readonly timeout: number;
+    protected server: net.Server;
+    protected registry: { [name: string]: ModuleProxy<any> } = {};
+    protected clients = new Map<string, net.Socket>();
+    protected activeClients = new Map<net.Socket, number>();
+    protected authorizedClients = new Map<net.Socket, boolean>();
+    protected suspendedTasks = new Map<net.Socket, {
+        [taskId: number]: ThenableAsyncGenerator;
+    }>();
+    protected gcTimer = setInterval(() => {
+        let now = Date.now();
+        let timeout = this.pingTimeout + 100;
+
+        for (let [socket, activeTime] of this.activeClients) {
+            if (now - activeTime >= timeout) {
+                this.refuceConnect(
+                    socket,
+                    "Connection reset due to long-time inactive"
+                );
+            }
+        }
+    }, this.timeout);
 
     open(): Promise<this> {
         return new Promise(async (resolve, reject) => {
@@ -132,61 +161,14 @@ export class RpcServer extends RpcChannel {
                 if (this.errorHandler && resolved) {
                     this.errorHandler.call(this, err);
                 }
-            }).on("connection", socket => {
-                let temp: Buffer[] = [];
-
-                socket.on("error", err => {
-                    // When any error occurs, if it's a socket reset error, e.g.
-                    // client disconnected unexpected, the server could just 
-                    // ignore the error. For other errors, the server should 
-                    // handle them with a custom handler.
-                    if (!isSocketResetError(err) && this.errorHandler) {
-                        this.errorHandler(err);
-                    }
-                }).on("end", () => {
-                    socket.emit("close", false);
-                }).on("close", () => {
-                    for (let [id, _socket] of this.clients) {
-                        if (Object.is(_socket, socket)) {
-                            this.clients.delete(id);
-                            break;
-                        }
-                    }
-                }).on("data", async (buf) => {
-                    let msg = receive<Request>(buf, temp);
-
-                    for (let [event, taskId, name, method, ...args] of msg) {
-                        if (event === RpcEvents.HANDSHAKE) {
-                            this.clients.set(<string>taskId, socket);
-                            // Send CONNECT event to notify the client that the 
-                            // connection is finished.
-                            this.dispatch(socket, RpcEvents.CONNECT);
-                        } else if (event === RpcEvents.REQUEST) {
-                            let event: RpcEvents, data: any;
-
-                            try {
-                                // Connect to the singleton instance and invokes
-                                // it's method to handle the request.
-                                let ins = this.registry[name].instance(local);
-                                data = await ins[method](...args);
-                                event = RpcEvents.RESPONSE;
-                            } catch (err) {
-                                event = RpcEvents.ERROR;
-                                data = err2obj(err);
-                            }
-
-                            // Send response or error to the client.
-                            this.dispatch(socket, event, taskId, data);
-                        }
-                    }
-                });
-            });
+            }).on("connection", this.handleConnection.bind(this));
         });
     }
 
     close(): Promise<this> {
         return new Promise(resolve => {
             if (this.server) {
+                clearInterval(this.gcTimer);
                 this.server.unref();
                 this.server.close(() => resolve(this));
             } else {
@@ -223,14 +205,145 @@ export class RpcServer extends RpcChannel {
     /** Returns all IDs of clients that connected to the server. */
     getClients(): string[] {
         let clients: string[];
-        this.clients.forEach((_, id) => clients.push(id));
+        let now = Date.now();
+        let timeout = this.pingTimeout + 100;
+
+        for (let [id, socket] of this.clients) {
+            let activeTime = this.activeClients.get(socket);
+
+            if (activeTime && now - activeTime < timeout) {
+                clients.push(id);
+            }
+        }
+
         return clients;
     }
 
-    private dispatch(socket: net.Socket, ...data: any[]) {
+    protected dispatch(socket: net.Socket, ...data: any[]) {
         if (!socket.destroyed && socket.writable) {
             socket.write(send(...data));
         }
+    }
+
+    protected refuceConnect(socket: net.Socket, reason?: string) {
+        socket.destroy(new Error(reason || "UnauthorizedClients connection"));
+    }
+
+    protected handleConnection(socket: net.Socket) {
+        let temp: Buffer[] = [];
+
+        socket.on("error", err => {
+            // When any error occurs, if it's a socket reset error, e.g.
+            // client disconnected unexpected, the server could just 
+            // ignore the error. For other errors, the server should 
+            // handle them with a custom handler.
+            if (!isSocketResetError(err) && this.errorHandler) {
+                this.errorHandler(err);
+            }
+        }).on("end", () => {
+            socket.emit("close", false);
+        }).on("close", () => {
+            for (let [id, _socket] of this.clients) {
+                if (Object.is(_socket, socket)) {
+                    this.clients.delete(id);
+                    this.activeClients.delete(socket);
+                    this.authorizedClients.delete(socket);
+                    break;
+                }
+            }
+        }).on("data", async (buf) => {
+            let msg = receive<Request>(buf, temp);
+
+            for (let [event, taskId, name, method, ...args] of msg) {
+                if (event !== RpcEvents.HANDSHAKE && !this.authorizedClients.get(socket)) {
+                    return this.refuceConnect(socket);
+                } else {
+                    this.activeClients.set(socket, Date.now());
+                }
+
+                switch (event) {
+                    case RpcEvents.HANDSHAKE:
+                        if ((!name && !this.secret) || name === this.secret) {
+                            this.clients.set(<string>taskId, socket);
+                            this.authorizedClients.set(socket, true);
+                            this.suspendedTasks.set(socket, {});
+                            // Send CONNECT event to notify the client that the 
+                            // connection is finished.
+                            this.dispatch(socket, RpcEvents.CONNECT, name);
+                        } else {
+                            this.refuceConnect(socket);
+                        }
+                        break;
+
+                    case RpcEvents.PING:
+                        this.dispatch(socket, RpcEvents.PONG);
+                        break;
+
+                    case RpcEvents.AWAIT:
+                        {
+                            let event: RpcEvents, data: any;
+                            let tasks = this.suspendedTasks.get(socket) || {};
+                            let task: ThenableAsyncGenerator = tasks[taskId];
+
+                            try {
+                                // Connect to the singleton instance and invokes
+                                // it's method to handle the request.
+                                if (task) {
+                                    delete tasks[taskId]
+                                } else {
+                                    let ins = this.registry[name].instance(local);
+                                    let source = ins[method](...args);
+                                    task = new ThenableAsyncGenerator(source);
+                                }
+
+                                data = await task;
+                                event = RpcEvents.RETURN;
+                            } catch (err) {
+                                event = RpcEvents.THROW;
+                                data = err2obj(err);
+                            }
+
+                            // Send response or error to the client.
+                            this.dispatch(socket, event, taskId, data);
+                        }
+                        break;
+
+                    case RpcEvents.YIELD:
+                    case RpcEvents.RETURN:
+                    case RpcEvents.THROW:
+                        {
+                            let data: any, input = args[0];
+                            let tasks = this.suspendedTasks.get(socket) || {};
+                            let task: ThenableAsyncGenerator = tasks[taskId];
+                            let res: IteratorResult<any>;
+
+                            try {
+                                if (!task) {
+                                    let ins = this.registry[name].instance(local);
+                                    let source = ins[method](...args);
+                                    task = new ThenableAsyncGenerator(source);
+                                    tasks[taskId] = task;
+                                }
+
+                                if (event === RpcEvents.YIELD) {
+                                    res = await task.next(input);
+                                } else if (event === RpcEvents.RETURN) {
+                                    res = await task.return(input);
+                                } else {
+                                    await task.throw(input);
+                                }
+                            } catch (err) {
+                                res = { value: err2obj(err), done: true };
+                            }
+
+                            data = res.value;
+                            res.done && task && (delete tasks[taskId]);
+                            this.dispatch(socket, event, taskId, data);
+                        }
+                        break;
+                }
+            }
+        });
     }
 }
 
@@ -243,22 +356,29 @@ export class RpcClient extends RpcChannel implements ClientOptions {
     connected = false;
     /** Whether the channel is closed. */
     closed = false;
-    private socket: net.Socket;
-    private initiated = false;
-    private registry: { [name: string]: ModuleProxy<any> } = {};
-    private temp: any[] = [];
-    private taskId: number = 0;
-    private tasks: { [taskId: number]: Task; } = {};
-    private events: { [name: string]: Subscriber[] } = {};
-    private finishConnect: Function;
+    protected socket: net.Socket;
+    protected initiated = false;
+    protected registry: { [name: string]: ModuleProxy<any> } = {};
+    protected temp: any[] = [];
+    protected taskId = sequid(0, true);
+    protected tasks: { [taskId: number]: Task; } = {};
+    protected events: { [name: string]: Subscriber[] } = {};
+    protected finishConnect: Function = null;
+    protected selfDestruction: NodeJS.Timer = null;
+    protected pingTimer = setInterval(() => {
+        this.selfDestruction = setTimeout(() => {
+            this.socket.destroy();
+        }, this.timeout);
+
+        this.send(RpcEvents.PING, this.id);
+    }, this.pingTimeout);
 
     constructor(path: string);
     constructor(port: number, host?: string);
-    constructor(options: RpcOptions);
-    constructor(options: string | number | RpcOptions, host?: string) {
+    constructor(options: ClientOptions);
+    constructor(options: string | number | ClientOptions, host?: string) {
         super(<any>options, host);
         this.id = this.id || Math.random().toString(16).slice(2);
-        this.timeout = this.timeout || 5000;
         this.socket = new net.Socket();
         this.socket.on("error", err => {
             if (this.connected && !isSocketResetError(err) && this.errorHandler) {
@@ -291,8 +411,8 @@ export class RpcClient extends RpcChannel implements ClientOptions {
                         break;
 
                     case RpcEvents.BROADCAST:
-                        // If receives the broadcast event, call all the listeners
-                        // bound to the corresponding event. 
+                        // If receives the broadcast event, call all the 
+                        // listeners bound to the corresponding event. 
                         let listeners = this.events[taskId] || [];
 
                         for (let handle of listeners) {
@@ -302,7 +422,8 @@ export class RpcClient extends RpcChannel implements ClientOptions {
 
                     // When receiving response from the server, resolve 
                     // immediately.
-                    case RpcEvents.RESPONSE:
+                    case RpcEvents.YIELD:
+                    case RpcEvents.RETURN:
                         if (task = this.tasks[taskId]) {
                             task.resolve(data);
                         }
@@ -310,10 +431,15 @@ export class RpcClient extends RpcChannel implements ClientOptions {
 
                     // If any error occurs on the server, it will be delivered
                     // to the client.
-                    case RpcEvents.ERROR:
+                    case RpcEvents.THROW:
                         if (task = this.tasks[taskId]) {
                             task.reject(obj2err(data));
                         }
+                        break;
+
+                    case RpcEvents.PONG:
+                        clearTimeout(this.selfDestruction);
+                        this.selfDestruction = null;
                         break;
                 }
             }
@@ -336,7 +462,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
                     this.connected = true;
                     resolve(this);
                 };
-                this.send(RpcEvents.HANDSHAKE, this.id);
+                this.send(RpcEvents.HANDSHAKE, this.id, this.secret);
             };
             let errorListener = (err: Error) => {
                 this.connecting = false;
@@ -364,6 +490,8 @@ export class RpcClient extends RpcChannel implements ClientOptions {
 
     close(): Promise<this> {
         return new Promise(resolve => {
+            clearInterval(this.pingTimer);
+            clearTimeout(this.selfDestruction);
             this.closed = true;
             this.connected = false;
             this.connecting = false;
@@ -454,7 +582,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
         }
     }
 
-    private async reconnect(timeout = 0) {
+    protected async reconnect(timeout = 0) {
         if (this.connected || this.connecting) return;
 
         try {
@@ -468,54 +596,64 @@ export class RpcClient extends RpcChannel implements ClientOptions {
         }
     }
 
-    private send(...data: Request) {
+    protected send(...data: Request) {
         if (this.socket && !this.socket.destroyed && this.socket.writable) {
             this.socket.write(send(...data));
         }
     }
 
-    private getTaskId() {
-        let taskId = this.taskId++;
-
-        if (this.taskId === Number.MAX_SAFE_INTEGER)
-            this.taskId = 0;
-
-        return taskId;
-    }
-
-    private createTask(resolve: Function, reject: Function): number {
-        let taskId = this.getTaskId();
-        let timer = setTimeout(() => { // Set a timer to reject when timeout.
-            let task = this.tasks[taskId];
+    protected createTimeout(reject: (err: Error) => void) {
+        return setTimeout(() => {
             let num = Math.round(this.timeout / 1000);
             let unit = num === 1 ? "second" : "seconds";
 
-            task.reject(new Error(
-                `RPC request timeout after ${num} ${unit}`
-            ));
+            reject(new Error(`RPC request timeout after ${num} ${unit}`));
         }, this.timeout);
-        let clean = () => {
-            clearTimeout(timer);
-            delete this.tasks[taskId];
-            return true;
-        };
+    };
 
-        this.tasks[taskId] = {
-            resolve: (res: any) => clean() && resolve(res),
-            reject: (err: Error) => clean() && reject(err)
-        };
+    protected prepareTask(taskId: number): Promise<any> {
+        let task: Task = this.tasks[taskId];
 
-        return taskId;
+        if (!task) {
+            task = this.tasks[taskId] = {};
+        }
+
+        return new Promise((resolve, reject) => {
+            let timer = this.createTimeout(reject);
+            task.resolve = (data: any) => {
+                clearTimeout(timer);
+                resolve(data);
+            };
+            task.reject = (err: Error) => {
+                clearTimeout(timer);
+                reject(err);
+            };
+        });
     }
 
-    private createFunction<T>(ins: T, name: string, method: string) {
+    protected createFunction<T>(ins: T, name: string, method: string) {
         let self = this;
         let originMethod = ins[method];
-        let fn = function (...args: any[]): Promise<any> {
-            return new Promise(async (resolve, reject) => {
-                let taskId = self.createTask(resolve, reject);
+        let fn = function (...args: any[]) {
+            let taskId = self.taskId.next().value;
 
-                self.send(RpcEvents.REQUEST, taskId, name, method, ...args);
+            return new ThenableAsyncGenerator({
+                next(value?: any) {
+                    self.send(RpcEvents.YIELD, taskId, name, method, value);
+                    return self.prepareTask(taskId);
+                },
+                return(value?: any) {
+                    self.send(RpcEvents.RETURN, taskId, name, method, value);
+                    return self.prepareTask(taskId);
+                },
+                throw(err?: Error) {
+                    self.send(RpcEvents.THROW, taskId, name, method, err2obj(err));
+                    return self.prepareTask(taskId);
+                },
+                then(resolver: (data: any) => void, rejecter: (err: any) => void) {
+                    self.send(RpcEvents.AWAIT, taskId, name, method, ...args);
+                    return self.prepareTask(taskId).then(resolver, rejecter);
+                }
             });
         };
 

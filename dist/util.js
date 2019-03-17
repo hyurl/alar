@@ -52,6 +52,8 @@ function getInstance(mod, instantiate = true) {
 }
 exports.getInstance = getInstance;
 function err2obj(err) {
+    if (!(err instanceof Error))
+        return err;
     let props = ["name", "message", "stack"];
     return Object.assign({}, pick(err, props), omit(err, props));
 }
