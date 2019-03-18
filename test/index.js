@@ -97,7 +97,7 @@ describe("Alar ModuleProxy", () => {
     // Due to **chokaidar**'s bug of [Not working with fs.writeFile](https://github.com/paulmillr/chokidar/issues/790)
     // the watching and reloading feature cannot be tested here, you could just 
     // test it in your own project.
-    // 
+
     // it("should watch file change and reload module as expected", (done) => {
     //     awaiter(null, null, null, function* () {
     //         var watcher = app.watch();
@@ -197,6 +197,41 @@ describe("Alar ModuleProxy", () => {
             yield client.close();
             yield server.close();
             done();
+        });
+    });
+
+    it("should get clients cponnected to the service in IDs as expected", () => {
+        awaiter(null, null, null, function* () {
+            var server = yield app.serve(config);
+            var client = yield app.connect(config);
+
+            assert.deepStrictEqual(server.getClients(), [client.id]);
+
+            yield client.close();
+            yield server.close();
+        });
+    });
+
+    it("should pause and resume remote service as expected as expected", () => {
+        awaiter(null, null, null, function* () {
+            var server = yield app.serve(config);
+            var client = yield app.connect(config);
+
+            server.register(app.service.user);
+            client.register(app.service.user);
+
+            assert.ok(app.service.user.instance() !== app.service.user.instance(app.local));
+
+            client.pause();
+
+            assert.ok(app.service.user.instance() === app.service.user.instance(app.local));
+
+            client.resume();
+
+            assert.ok(app.service.user.instance() !== app.service.user.instance(app.local));
+
+            yield client.close();
+            yield server.close();
         });
     });
 
@@ -362,6 +397,105 @@ describe("Alar ModuleProxy", () => {
             }
 
             assert.strictEqual(data, "Mr. World");
+
+            yield client.close();
+            yield server.close();
+            done();
+        });
+    });
+
+    it("should get result from a remote generator as expected", (done) => {
+        awaiter(null, null, null, function* () {
+            var server = yield app.serve(config);
+            var client = yield app.connect(config);
+            var result = [];
+
+            server.register(app.service.user);
+            client.register(app.service.user);
+
+            var generator = app.service.user.instance().getFriends("Open Source", "Good Fella");
+            while (true) {
+                let res = yield generator.next();
+
+                result.push(res.value);
+
+                if (res.done) {
+                    break;
+                }
+            }
+
+            assert.deepStrictEqual(result, ["Mozilla", "GitHub", "Linux", ["Open Source", "Good Fella"]]);
+
+            yield client.close();
+            yield server.close();
+            done();
+        });
+    });
+
+    it("should invoke next method in the remote generator as expected", (done) => {
+        awaiter(null, null, null, function* () {
+            var server = yield app.serve(config);
+            var client = yield app.connect(config);
+
+            server.register(app.service.user);
+            client.register(app.service.user);
+
+            var generator = app.service.user.instance().repeatAfterMe();
+            var result = yield generator.next("Google");
+            var result1 = yield generator.next("Google");
+
+            assert.deepStrictEqual(result, { value: undefined, done: false });
+            assert.deepStrictEqual(result1, { value: "Google", done: false });
+
+            yield client.close();
+            yield server.close();
+            done();
+        });
+    });
+
+    it("should invoke return method in the remote generator as expected", (done) => {
+        awaiter(null, null, null, function* () {
+            var server = yield app.serve(config);
+            var client = yield app.connect(config);
+
+            server.register(app.service.user);
+            client.register(app.service.user);
+
+            var generator = app.service.user.instance().repeatAfterMe();
+            var result = yield generator.return("Google");
+
+            assert.deepStrictEqual(result, { value: "Google", done: true });
+            assert.strictEqual(yield generator, "Google");
+
+            yield client.close();
+            yield server.close();
+            done();
+        });
+    });
+
+    it("should invoke thorw method in the remote generator as expected", (done) => {
+        awaiter(null, null, null, function* () {
+            var server = yield app.serve(config);
+            var client = yield app.connect(config);
+
+            server.register(app.service.user);
+            client.register(app.service.user);
+
+            var generator = app.service.user.instance().repeatAfterMe();
+            var _err = new Error("test throw method");
+            var err;
+
+            try {
+                yield generator.throw(_err);
+            } catch (e) {
+                err = e;
+            }
+
+            assert.ok(err !== _err);
+            assert.ok(err instanceof Error);
+            assert.strictEqual(err.message, "test throw method");
+            assert.deepStrictEqual(yield generator.next(), { value: undefined, done: true });
+            assert.strictEqual(yield generator, undefined);
 
             yield client.close();
             yield server.close();

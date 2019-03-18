@@ -68,10 +68,10 @@ class RpcServer extends RpcChannel {
         this.suspendedTasks = new Map();
         this.gcTimer = setInterval(() => {
             let now = Date.now();
-            let timeout = this.pingTimeout + 100;
+            let timeout = this.pingTimeout + 5;
             for (let [, socket] of this.clients) {
-                if (now - socket[lastActiveTime] >= timeout) {
-                    this.refuseConnect(socket, "Connection reset due to long-time inactive");
+                if (now - socket[lastActiveTime] > timeout) {
+                    socket.destroy();
                 }
             }
         }, this.timeout);
@@ -131,11 +131,10 @@ class RpcServer extends RpcChannel {
         return sent;
     }
     getClients() {
-        let clients;
+        let clients = [];
         let now = Date.now();
-        let timeout = this.pingTimeout + 100;
         for (let [id, socket] of this.clients) {
-            if (now - socket[lastActiveTime] < timeout) {
+            if (now - socket[lastActiveTime] <= this.pingTimeout) {
                 clients.push(id);
             }
         }
@@ -145,9 +144,6 @@ class RpcServer extends RpcChannel {
         if (!socket.destroyed && socket.writable) {
             socket.write(bsp_1.send(...data));
         }
-    }
-    refuseConnect(socket, reason) {
-        socket.destroy(new Error(reason || "UnauthorizedClients connection"));
     }
     handleConnection(socket) {
         let temp = [];
@@ -159,13 +155,18 @@ class RpcServer extends RpcChannel {
             socket.emit("close", false);
         }).on("close", () => {
             this.clients.deleteValue(socket);
+            let tasks = this.suspendedTasks.get(socket);
+            this.suspendedTasks.delete(socket);
+            for (let id in tasks) {
+                tasks[id].return();
+            }
         }).on("data", (buf) => tslib_1.__awaiter(this, void 0, void 0, function* () {
             if (!socket[authorized]) {
                 if (this.secret) {
                     let index = buf.indexOf("\r\n");
                     let secret = buf.slice(0, index).toString();
                     if (secret !== this.secret) {
-                        return this.refuseConnect(socket);
+                        return socket.destroy();
                     }
                     else {
                         buf = buf.slice(index + 2);
@@ -187,7 +188,7 @@ class RpcServer extends RpcChannel {
                         break;
                     case RpcEvents.AWAIT:
                         {
-                            let event, data;
+                            let data;
                             let tasks = this.suspendedTasks.get(socket) || {};
                             let task = tasks[taskId];
                             try {
@@ -196,7 +197,7 @@ class RpcServer extends RpcChannel {
                                 }
                                 else {
                                     let ins = this.registry[name].instance(util_1.local);
-                                    let source = ins[method](...args);
+                                    let source = ins[method].apply(ins, args);
                                     task = new thenable_generator_1.ThenableAsyncGenerator(source);
                                 }
                                 data = yield task;
@@ -213,32 +214,36 @@ class RpcServer extends RpcChannel {
                     case RpcEvents.RETURN:
                     case RpcEvents.THROW:
                         {
-                            let data, input = args[0];
+                            let data, input;
                             let tasks = this.suspendedTasks.get(socket) || {};
                             let task = tasks[taskId];
-                            let res;
                             try {
                                 if (!task) {
                                     let ins = this.registry[name].instance(util_1.local);
-                                    let source = ins[method](...args);
+                                    let source = ins[method].apply(ins, args[0]);
+                                    input = args[1];
                                     task = new thenable_generator_1.ThenableAsyncGenerator(source);
                                     tasks[taskId] = task;
                                 }
+                                else {
+                                    input = args[0];
+                                }
                                 if (event === RpcEvents.YIELD) {
-                                    res = yield task.next(input);
+                                    data = yield task.next(input);
                                 }
                                 else if (event === RpcEvents.RETURN) {
-                                    res = yield task.return(input);
+                                    data = yield task.return(input);
                                 }
                                 else {
                                     yield task.throw(input);
                                 }
+                                data.done && (delete tasks[taskId]);
                             }
                             catch (err) {
-                                res = { value: util_1.err2obj(err), done: true };
+                                event = RpcEvents.THROW;
+                                data = util_1.err2obj(err);
+                                task && (delete tasks[taskId]);
                             }
-                            data = res.value;
-                            res.done && task && (delete tasks[taskId]);
                             this.dispatch(socket, event, taskId, data);
                         }
                         break;
@@ -421,6 +426,14 @@ class RpcClient extends RpcChannel {
             return false;
         }
     }
+    send(...data) {
+        if (this.socket && !this.socket.destroyed && this.socket.writable) {
+            if (data[data.length - 1] === undefined) {
+                data.pop();
+            }
+            this.socket.write(bsp_1.send(...data));
+        }
+    }
     reconnect(timeout = 0) {
         return tslib_1.__awaiter(this, void 0, void 0, function* () {
             if (this.connected || this.connecting)
@@ -436,23 +449,49 @@ class RpcClient extends RpcChannel {
             }
         });
     }
-    send(...data) {
-        if (this.socket && !this.socket.destroyed && this.socket.writable) {
-            this.socket.write(bsp_1.send(...data));
-        }
+    createFunction(ins, name, method) {
+        let self = this;
+        let originMethod = ins[method];
+        let fn = function (...args) {
+            return new thenable_generator_1.ThenableAsyncGenerator(new ThenableIteratorProxy(self, name, method, ...args));
+        };
+        return util_1.mergeFnProperties(fn, originMethod);
+    }
+}
+exports.RpcClient = RpcClient;
+class ThenableIteratorProxy {
+    constructor(client, name, method, ...args) {
+        this.client = client;
+        this.name = name;
+        this.method = method;
+        this.taskId = this.client["taskId"].next().value;
+        this.status = "uninitiated";
+        this.args = args;
+    }
+    next(value) {
+        return this.invokeTask(RpcEvents.YIELD, value);
+    }
+    return(value) {
+        return this.invokeTask(RpcEvents.RETURN, value);
+    }
+    throw(err) {
+        return this.invokeTask(RpcEvents.THROW, util_1.err2obj(err));
+    }
+    then(resolver, rejecter) {
+        return this.invokeTask(RpcEvents.AWAIT, ...this.args).then(resolver, rejecter);
     }
     createTimeout(reject) {
         return setTimeout(() => {
-            let num = Math.round(this.timeout / 1000);
+            let num = Math.round(this.client.timeout / 1000);
             let unit = num === 1 ? "second" : "seconds";
             reject(new Error(`RPC request timeout after ${num} ${unit}`));
-        }, this.timeout);
+        }, this.client.timeout);
     }
     ;
-    prepareTask(taskId) {
-        let task = this.tasks[taskId];
+    prepareTask() {
+        let task = this.client["tasks"][this.taskId];
         if (!task) {
-            task = this.tasks[taskId] = {};
+            task = this.client["tasks"][this.taskId] = {};
         }
         return new Promise((resolve, reject) => {
             let timer = this.createTimeout(reject);
@@ -466,32 +505,37 @@ class RpcClient extends RpcChannel {
             };
         });
     }
-    createFunction(ins, name, method) {
-        let self = this;
-        let originMethod = ins[method];
-        let fn = function (...args) {
-            let taskId = self.taskId.next().value;
-            return new thenable_generator_1.ThenableAsyncGenerator({
-                next(value) {
-                    self.send(RpcEvents.YIELD, taskId, name, method, value);
-                    return self.prepareTask(taskId);
-                },
-                return(value) {
-                    self.send(RpcEvents.RETURN, taskId, name, method, value);
-                    return self.prepareTask(taskId);
-                },
-                throw(err) {
-                    self.send(RpcEvents.THROW, taskId, name, method, util_1.err2obj(err));
-                    return self.prepareTask(taskId);
-                },
-                then(resolver, rejecter) {
-                    self.send(RpcEvents.AWAIT, taskId, name, method, ...args);
-                    return self.prepareTask(taskId).then(resolver, rejecter);
+    invokeTask(event, ...args) {
+        if (this.status === "uninitiated" || this.status === "suspended") {
+            if (this.status === "uninitiated" && event !== RpcEvents.AWAIT) {
+                this.client.send(event, this.taskId, this.name, this.method, [...this.args], ...args);
+            }
+            else {
+                this.client.send(event, this.taskId, this.name, this.method, ...args);
+            }
+            this.status = "suspended";
+            return this.prepareTask().then(res => {
+                if (event === RpcEvents.AWAIT || res.done) {
+                    delete this.client["tasks"][this.taskId];
+                    this.status = "closed";
                 }
+                if (event !== RpcEvents.AWAIT && !("value" in res)) {
+                    res.value = void 0;
+                }
+                return (this.result = res);
+            }).catch(err => {
+                this.status = "errored";
+                this.result = err;
+                throw err;
             });
-        };
-        return util_1.mergeFnProperties(fn, originMethod);
+        }
+        else if (this.status === "closed") {
+            return Promise.resolve(this.result);
+        }
+        else {
+            return Promise.reject(args[0]);
+        }
     }
 }
-exports.RpcClient = RpcClient;
+exports.ThenableIteratorProxy = ThenableIteratorProxy;
 //# sourceMappingURL=rpc.js.map

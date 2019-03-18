@@ -119,14 +119,16 @@ export class RpcServer extends RpcChannel {
     }>();
     protected gcTimer = setInterval(() => {
         let now = Date.now();
-        let timeout = this.pingTimeout + 100;
+
+        // In case the client is making a ping at this moment, set the checking 
+        // timeout to a higher number to avoid closing the connection before 
+        // ping finishes.
+        let timeout = this.pingTimeout + 5;
 
         for (let [, socket] of this.clients) {
-            if (now - socket[lastActiveTime] >= timeout) {
-                this.refuseConnect(
-                    socket,
-                    "Connection reset due to long-time inactive"
-                );
+            if (now - socket[lastActiveTime] > timeout) {
+                // destroy the connection.
+                socket.destroy();
             }
         }
     }, this.timeout);
@@ -202,12 +204,11 @@ export class RpcServer extends RpcChannel {
 
     /** Returns all IDs of clients that connected to the server. */
     getClients(): string[] {
-        let clients: string[];
+        let clients: string[] = [];
         let now = Date.now();
-        let timeout = this.pingTimeout + 100;
 
         for (let [id, socket] of this.clients) {
-            if (now - socket[lastActiveTime] < timeout) {
+            if (now - socket[lastActiveTime] <= this.pingTimeout) {
                 clients.push(id);
             }
         }
@@ -219,10 +220,6 @@ export class RpcServer extends RpcChannel {
         if (!socket.destroyed && socket.writable) {
             socket.write(send(...data));
         }
-    }
-
-    protected refuseConnect(socket: net.Socket, reason?: string) {
-        socket.destroy(new Error(reason || "UnauthorizedClients connection"));
     }
 
     protected handleConnection(socket: net.Socket) {
@@ -240,6 +237,14 @@ export class RpcServer extends RpcChannel {
             socket.emit("close", false);
         }).on("close", () => {
             this.clients.deleteValue(socket);
+
+            let tasks = this.suspendedTasks.get(socket);
+            this.suspendedTasks.delete(socket);
+
+            // close all suspended tasks of the socket.
+            for (let id in tasks) {
+                tasks[id].return();
+            }
         }).on("data", async (buf) => {
             if (!socket[authorized]) {
                 if (this.secret) {
@@ -247,7 +252,7 @@ export class RpcServer extends RpcChannel {
                     let secret = buf.slice(0, index).toString();
 
                     if (secret !== this.secret) {
-                        return this.refuseConnect(socket);
+                        return socket.destroy();
                     } else {
                         buf = buf.slice(index + 2);
                     }
@@ -276,18 +281,22 @@ export class RpcServer extends RpcChannel {
 
                     case RpcEvents.AWAIT:
                         {
-                            let event: RpcEvents, data: any;
+                            let data: any;
                             let tasks = this.suspendedTasks.get(socket) || {};
                             let task: ThenableAsyncGenerator = tasks[taskId];
 
                             try {
-                                // Connect to the singleton instance and invokes
-                                // it's method to handle the request.
                                 if (task) {
-                                    delete tasks[taskId]
+                                    delete tasks[taskId];
                                 } else {
+                                    // Connect to the singleton instance and 
+                                    // invokes it's method to handle the request.
                                     let ins = this.registry[name].instance(local);
-                                    let source = ins[method](...args);
+                                    let source = ins[method].apply(ins, args);
+
+                                    // Pack the result to a ThenableAsyncGenerator
+                                    // so that it can be awaited to get the final
+                                    // result even if it's a generator.
                                     task = new ThenableAsyncGenerator(source);
                                 }
 
@@ -307,32 +316,52 @@ export class RpcServer extends RpcChannel {
                     case RpcEvents.RETURN:
                     case RpcEvents.THROW:
                         {
-                            let data: any, input = args[0];
+                            let data: any, input: any;
                             let tasks = this.suspendedTasks.get(socket) || {};
                             let task: ThenableAsyncGenerator = tasks[taskId];
-                            let res: IteratorResult<any>;
 
                             try {
                                 if (!task) {
+                                    // If the function hasn't be initiated, then
+                                    // invoke it immediately, the client should
+                                    // send the arguments for invoking as well
+                                    // and put them in a individual array before 
+                                    // the argument used to call the generator's
+                                    // methods.
                                     let ins = this.registry[name].instance(local);
-                                    let source = ins[method](...args);
+                                    let source = ins[method].apply(ins, args[0]);
+
+                                    input = args[1];
+
+                                    // Pack the result to a ThenableAsyncGenerator
+                                    // so that it can be used as a generator
+                                    //  even if it's not a generator.
                                     task = new ThenableAsyncGenerator(source);
                                     tasks[taskId] = task;
+                                } else {
+                                    input = args[0];
                                 }
 
+                                // Invokes the generator's method according to
+                                // the event.
                                 if (event === RpcEvents.YIELD) {
-                                    res = await task.next(input);
+                                    data = await task.next(input);
                                 } else if (event === RpcEvents.RETURN) {
-                                    res = await task.return(input);
+                                    data = await task.return(input);
                                 } else {
+                                    // Calling the throw method will cause an
+                                    // error being thrown and go to the catch
+                                    // block.
                                     await task.throw(input);
                                 }
+
+                                data.done && (delete tasks[taskId]);
                             } catch (err) {
-                                res = { value: err2obj(err), done: true };
+                                event = RpcEvents.THROW;
+                                data = err2obj(err);
+                                task && (delete tasks[taskId]);
                             }
 
-                            data = res.value;
-                            res.done && task && (delete tasks[taskId]);
                             this.dispatch(socket, event, taskId, data);
                         }
                         break;
@@ -362,6 +391,9 @@ export class RpcClient extends RpcChannel implements ClientOptions {
     protected selfDestruction: NodeJS.Timer = null;
     protected pingTimer = setInterval(() => {
         this.selfDestruction = setTimeout(() => {
+            // If the server doesn't response after timeout, that indicates 
+            // something is wrong with the connection, destroy it so it can be
+            // reconnected.
             this.socket.destroy();
         }, this.timeout);
 
@@ -433,6 +465,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
                         break;
 
                     case RpcEvents.PONG:
+                        // cancel self destruction.
                         clearTimeout(this.selfDestruction);
                         this.selfDestruction = null;
                         break;
@@ -457,6 +490,8 @@ export class RpcClient extends RpcChannel implements ClientOptions {
                     this.connected = true;
                     resolve(this);
                 };
+
+                // sending the connection secret before hitting handshaking.
                 this.socket.write((this.secret || "") + "\r\n", () => {
                     this.send(RpcEvents.HANDSHAKE, this.id);
                 });
@@ -579,6 +614,17 @@ export class RpcClient extends RpcChannel implements ClientOptions {
         }
     }
 
+    send(...data: Request) {
+        if (this.socket && !this.socket.destroyed && this.socket.writable) {
+            // If the last argument in the data is undefined, do not send it.
+            if (data[data.length - 1] === undefined) {
+                data.pop();
+            }
+
+            this.socket.write(send(...data));
+        }
+    }
+
     protected async reconnect(timeout = 0) {
         if (this.connected || this.connecting) return;
 
@@ -593,28 +639,74 @@ export class RpcClient extends RpcChannel implements ClientOptions {
         }
     }
 
-    protected send(...data: Request) {
-        if (this.socket && !this.socket.destroyed && this.socket.writable) {
-            this.socket.write(send(...data));
-        }
+    protected createFunction<T>(ins: T, name: string, method: string) {
+        let self = this;
+        let originMethod = ins[method];
+        let fn = function (...args: any[]) {
+            // Return a ThenableAsyncGenerator instance when the remote function
+            // is called, so that it can be awaited or used as a generator.
+            return new ThenableAsyncGenerator(new ThenableIteratorProxy(
+                self,
+                name,
+                method,
+                ...args
+            ));
+        };
+
+        return mergeFnProperties(fn, originMethod);
+    }
+}
+
+export class ThenableIteratorProxy {
+    readonly taskId: number = this.client["taskId"].next().value;
+    protected status: "uninitiated" | "suspended" | "errored" | "closed" = "uninitiated";
+    protected result: any;
+    protected args: any[];
+
+    constructor(
+        protected client: RpcClient,
+        protected name: string,
+        protected method: string,
+        ...args: any[]
+    ) {
+        this.args = args;
+    }
+
+    next(value?: any) {
+        return this.invokeTask(RpcEvents.YIELD, value);
+    }
+
+    return(value?: any) {
+        return this.invokeTask(RpcEvents.RETURN, value);
+    }
+
+    throw(err?: Error) {
+        return this.invokeTask(RpcEvents.THROW, err2obj(err));
+    }
+
+    then(resolver: (data: any) => void, rejecter: (err: any) => void) {
+        return this.invokeTask(RpcEvents.AWAIT, ...this.args).then(resolver, rejecter);
     }
 
     protected createTimeout(reject: (err: Error) => void) {
         return setTimeout(() => {
-            let num = Math.round(this.timeout / 1000);
+            let num = Math.round(this.client.timeout / 1000);
             let unit = num === 1 ? "second" : "seconds";
 
             reject(new Error(`RPC request timeout after ${num} ${unit}`));
-        }, this.timeout);
+        }, this.client.timeout);
     };
 
-    protected prepareTask(taskId: number): Promise<any> {
-        let task: Task = this.tasks[taskId];
+    protected prepareTask(): Promise<any> {
+        let task: Task = this.client["tasks"][this.taskId];
 
         if (!task) {
-            task = this.tasks[taskId] = {};
+            task = this.client["tasks"][this.taskId] = {};
         }
 
+        // Pack every request as Promise, and assign the resolver and rejecter 
+        // to the task, so that when the result or any error is received, 
+        // then can be called correctly.
         return new Promise((resolve, reject) => {
             let timer = this.createTimeout(reject);
             task.resolve = (data: any) => {
@@ -628,32 +720,59 @@ export class RpcClient extends RpcChannel implements ClientOptions {
         });
     }
 
-    protected createFunction<T>(ins: T, name: string, method: string) {
-        let self = this;
-        let originMethod = ins[method];
-        let fn = function (...args: any[]) {
-            let taskId = self.taskId.next().value;
+    protected invokeTask(event: RpcEvents, ...args: any[]): Promise<any> {
+        if (this.status === "uninitiated" || this.status === "suspended") {
+            if (this.status === "uninitiated" && event !== RpcEvents.AWAIT) {
+                // If in a generator call and the generator hasn't been 
+                // initiated, send the request with arguments for initiation on
+                // the server.
+                this.client.send(
+                    event,
+                    this.taskId,
+                    this.name,
+                    this.method,
+                    [...this.args],
+                    ...args
+                );
+            } else {
+                this.client.send(
+                    event,
+                    this.taskId,
+                    this.name,
+                    this.method,
+                    ...args
+                );
+            }
 
-            return new ThenableAsyncGenerator({
-                next(value?: any) {
-                    self.send(RpcEvents.YIELD, taskId, name, method, value);
-                    return self.prepareTask(taskId);
-                },
-                return(value?: any) {
-                    self.send(RpcEvents.RETURN, taskId, name, method, value);
-                    return self.prepareTask(taskId);
-                },
-                throw(err?: Error) {
-                    self.send(RpcEvents.THROW, taskId, name, method, err2obj(err));
-                    return self.prepareTask(taskId);
-                },
-                then(resolver: (data: any) => void, rejecter: (err: any) => void) {
-                    self.send(RpcEvents.AWAIT, taskId, name, method, ...args);
-                    return self.prepareTask(taskId).then(resolver, rejecter);
+            this.status = "suspended";
+
+            return this.prepareTask().then(res => {
+                if (event === RpcEvents.AWAIT || res.done) {
+                    // Mark the status to closed, so that any operations on the
+                    // current generator after will return the local result 
+                    // instead of requesting the remote service again.
+                    delete this.client["tasks"][this.taskId];
+                    this.status = "closed";
                 }
-            });
-        };
 
-        return mergeFnProperties(fn, originMethod);
+                if (event !== RpcEvents.AWAIT && !("value" in res)) {
+                    res.value = void 0;
+                }
+
+                return (this.result = res);
+            }).catch(err => {
+                // Mark the status to errored, so that any operations on the
+                // current generator after will return the local result 
+                // instead of requesting the remote service again.
+                this.status = "errored";
+                this.result = err;
+
+                throw err;
+            });
+        } else if (this.status === "closed") {
+            return Promise.resolve(this.result);
+        } else { // this.status === "errored"
+            return Promise.reject(args[0]);
+        }
     }
 }
