@@ -207,4 +207,71 @@ well, which starts the watcher, when the `user` module is changed, the
 `remote-service` will reload the module as expected, and the `index` calls it 
 remotely will get the new result as expected.
 
+## Generator Support
+
+Since version 3.3.0, Alar supports generators (and async generators) in both
+local call and remote call contexts.
+
+```typescript
+// src/service/user.ts
+declare global {
+    namespace app {
+        namespace service {
+            const user: ModuleProxy<User>
+        }
+    }
+}
+
+export default class User {
+    // ...
+    async *getFriends() {
+        yield "Jane";
+        yield "Ben";
+        yield "Albert";
+        return "We are budies";
+    }
+}
+
+// index.ts
+(async () => {
+    // Whther calling the local instance or a remote instance, the following 
+    // program produce the same result.
+
+    let generator = app.service.user.instance().getFriends();
+
+    for await (let name of generator) {
+        console.log(name);
+        // Jane
+        // Ben
+        // Albert
+    }
+
+    // If want to get the returning value, just call await on the generator.
+    // NOTE: this syntax only works with Alar framework, don't use it with 
+    // general generators.
+    console.log(await generator); // We are budies
+
+    // The following usage gets the same result.
+
+    let generator2 = app.service.user.instance().getFriends();
+    
+    while (true) {
+        let { value, done } = await generator2.next();
+        
+        console.log(value);
+        // NOTE: calling next() will return the returning value of the generator
+        // as well, so the output would be:
+        //
+        // Jane
+        // Ben
+        // Albert
+        // We are budies
+
+        if (done) {
+            break;
+        }
+    }
+});
+```
+
 For more details, please check the [API documentation](./api.md).

@@ -4,6 +4,7 @@ import { AssertionError } from 'assert';
 import pick = require("lodash/pick");
 import omit = require("lodash/omit");
 import startsWith = require("lodash/startsWith");
+import { ThenableAsyncGenerator, ThenableGenerator } from 'thenable-generator';
 
 type ErrorObject = Error & { [x: string]: any };
 const WinPipe = "\\\\?\\pipe\\";
@@ -100,7 +101,7 @@ export function mergeFnProperties(fn: Function, origin: Function) {
 
 export function createRemoteInstance(
     mod: ModuleProxy<any>,
-    fnCreator: (ins: any, prop: string) => Function
+    fnCreator: (prop: string) => Function
 ) {
 
     // Generate a proxified singleton instance to the module, so that it can
@@ -112,13 +113,45 @@ export function createRemoteInstance(
             let isFn = type === "function";
 
             if (isFn && !ins[prop].proxified) {
-                set(ins, prop, fnCreator(ins, prop));
+                set(ins, prop, mergeFnProperties(fnCreator(prop), ins[prop]));
             }
 
             return isFn ? ins[prop] : (type === "undefined" ? undefined : null);
         },
         has: (ins, prop: string) => {
             return typeof ins[prop] === "function";
+        }
+    });
+}
+
+function generable(origin: Function) {
+    return function (this: any, ...args: any[]) {
+        try {
+            let res = origin.apply(this, args);
+
+            if (res && typeof res[Symbol.asyncIterator] === "function") {
+                return new ThenableAsyncGenerator(res);
+            } else if (res && typeof res[Symbol.iterator] === "function") {
+                return new ThenableGenerator(res);
+            } else {
+                return res;
+            }
+        } catch (err) {
+            throw err;
+        }
+    };
+}
+
+export function createLocalInstance(mod: ModuleProxy<any>) {
+    return new Proxy(getInstance(mod), {
+        get: (ins, prop: string) => {
+            if (typeof ins[prop] === "function" && !ins[prop].proxified) {
+                let origin: Function = ins[prop];
+
+                set(ins, prop, mergeFnProperties(generable(origin), origin));
+            }
+
+            return ins[prop];
         }
     });
 }

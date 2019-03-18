@@ -15,7 +15,6 @@ import {
     err2obj,
     absPath,
     createRemoteInstance,
-    mergeFnProperties,
     local,
     remotized
 } from './util';
@@ -548,8 +547,8 @@ export class RpcClient extends RpcChannel implements ClientOptions {
         mod[remotized] = true;
         mod["remoteSingletons"][this.dsn] = createRemoteInstance(
             mod,
-            (ins, prop) => {
-                return this.createFunction(ins, mod.name, prop);
+            (prop) => {
+                return this.createFunction(mod.name, prop);
             }
         );
 
@@ -642,10 +641,9 @@ export class RpcClient extends RpcChannel implements ClientOptions {
         }
     }
 
-    protected createFunction<T>(ins: T, name: string, method: string) {
+    protected createFunction(name: string, method: string) {
         let self = this;
-        let originMethod = ins[method];
-        let fn = function (...args: any[]) {
+        return function (...args: any[]) {
             // Return a ThenableAsyncGenerator instance when the remote function
             // is called, so that it can be awaited or used as a generator.
             return new ThenableAsyncGenerator(new ThenableIteratorProxy(
@@ -655,12 +653,10 @@ export class RpcClient extends RpcChannel implements ClientOptions {
                 ...args
             ));
         };
-
-        return mergeFnProperties(fn, originMethod);
     }
 }
 
-export class ThenableIteratorProxy implements ThenableAsyncGeneratorLike {
+class ThenableIteratorProxy implements ThenableAsyncGeneratorLike {
     readonly taskId: number = this.client["taskId"].next().value;
     protected status: "uninitiated" | "suspended" | "errored" | "closed";
     protected result: any;

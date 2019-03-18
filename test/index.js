@@ -91,7 +91,7 @@ describe("Alar ModuleProxy", () => {
 
     it("should use the prototype module as singleton as expected", () => {
         let ins = app.config.instance();
-        assert.strictEqual(ins, config);
+        assert.deepStrictEqual(ins, config);
     });
 
     // Due to **chokaidar**'s bug of [Not working with fs.writeFile](https://github.com/paulmillr/chokidar/issues/790)
@@ -141,7 +141,6 @@ describe("Alar ModuleProxy", () => {
         });
 
         assert.deepStrictEqual(json.test.instance(), { name: "JSON", version: "1.0.0" });
-        assert.strictEqual(Object.getPrototypeOf(json.test.create()), json.test.instance());
     });
 
     it("should serve an IPC service as expected", (done) => {
@@ -499,6 +498,72 @@ describe("Alar ModuleProxy", () => {
 
             yield client.close();
             yield server.close();
+            done();
+        });
+    });
+
+    it("should get result from a local generator as expected", (done) => {
+        awaiter(null, null, null, function* () {
+            var result = [];
+            var generator = app.service.user.instance(app.local).getFriends("Open Source", "Good Fella");
+
+            while (true) {
+                let res = generator.next();
+
+                result.push(res.value);
+
+                if (res.done) {
+                    break;
+                }
+            }
+
+            assert.deepStrictEqual(result, ["Mozilla", "GitHub", "Linux", ["Open Source", "Good Fella"]]);
+            done();
+        });
+    });
+
+    it("should invoke next method in the local generator as expected", (done) => {
+        awaiter(null, null, null, function* () {
+            var generator = app.service.user.instance(app.local).repeatAfterMe();
+            var result = generator.next("Google");
+            var result1 = generator.next("Google");
+
+            assert.deepStrictEqual(result, { value: undefined, done: false });
+            assert.deepStrictEqual(result1, { value: "Google", done: false });
+
+            done();
+        });
+    });
+
+    it("should invoke return method in the local generator as expected", (done) => {
+        awaiter(null, null, null, function* () {
+            var generator = app.service.user.instance(app.local).repeatAfterMe();
+            var result = generator.return("Google");
+
+            assert.deepStrictEqual(result, { value: "Google", done: true });
+            assert.strictEqual(yield generator, "Google");
+            done();
+        });
+    });
+
+    it("should invoke thorw method in the remote generator as expected", (done) => {
+        awaiter(null, null, null, function* () {
+            var generator = app.service.user.instance(app.local).repeatAfterMe();
+            var _err = new Error("test throw method");
+            var err;
+
+            try {
+                generator.throw(_err);
+            } catch (e) {
+                err = e;
+            }
+
+            assert.ok(err === _err);
+            assert.ok(err instanceof Error);
+            assert.strictEqual(err.message, "test throw method");
+            assert.deepStrictEqual(generator.next(), { value: undefined, done: true });
+            assert.strictEqual(yield generator, undefined);
+
             done();
         });
     });

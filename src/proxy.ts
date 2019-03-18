@@ -2,8 +2,9 @@ import hash = require("string-hash");
 import objectHash = require("object-hash");
 import { sep, normalize } from "path";
 import { applyMagic } from "js-magic";
-import { getInstance, local, remotized, noLocal } from './util';
+import { createLocalInstance, local, remotized, noLocal } from './util';
 import { ModuleLoader } from './index';
+import { deprecate } from "util";
 
 const isTsNode = process.execArgv.join(" ").includes("ts-node");
 const defaultLoader: ModuleLoader = {
@@ -71,7 +72,7 @@ export class ModuleProxyBase<T = any> implements ModuleProxy<T> {
 
         if (route === local || !this[remotized] || (!keys.length && !this[noLocal])) {
             return this.singletons[this.name] || (
-                this.singletons[this.name] = getInstance(<any>this)
+                this.singletons[this.name] = createLocalInstance(<any>this)
             );
         } else if (keys.length) {
             // If the module is connected to one or more remote instances,
@@ -89,7 +90,6 @@ export class ModuleProxyBase<T = any> implements ModuleProxy<T> {
     }
 
     remote(route: any = ""): T {
-        process.emitWarning("ModuleProxy<T>.route() has been deprecated, use ModuleProxy<T>.instance() instead");
         return this.instance(route);
     }
 
@@ -115,3 +115,8 @@ export class ModuleProxyBase<T = any> implements ModuleProxy<T> {
         return (prop in this) || (prop in this.children);
     }
 }
+
+ModuleProxyBase.prototype.remote = deprecate(
+    ModuleProxyBase.prototype.remote,
+    "ModuleProxy<T>.route() has been deprecated, use ModuleProxy<T>.instance() instead"
+);

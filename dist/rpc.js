@@ -380,8 +380,8 @@ class RpcClient extends RpcChannel {
     register(mod) {
         this.registry[mod.name] = mod;
         mod[util_1.remotized] = true;
-        mod["remoteSingletons"][this.dsn] = util_1.createRemoteInstance(mod, (ins, prop) => {
-            return this.createFunction(ins, mod.name, prop);
+        mod["remoteSingletons"][this.dsn] = util_1.createRemoteInstance(mod, (prop) => {
+            return this.createFunction(mod.name, prop);
         });
         return this;
     }
@@ -449,13 +449,11 @@ class RpcClient extends RpcChannel {
             }
         });
     }
-    createFunction(ins, name, method) {
+    createFunction(name, method) {
         let self = this;
-        let originMethod = ins[method];
-        let fn = function (...args) {
+        return function (...args) {
             return new thenable_generator_1.ThenableAsyncGenerator(new ThenableIteratorProxy(self, name, method, ...args));
         };
-        return util_1.mergeFnProperties(fn, originMethod);
     }
 }
 exports.RpcClient = RpcClient;
@@ -538,5 +536,4 @@ class ThenableIteratorProxy {
         }
     }
 }
-exports.ThenableIteratorProxy = ThenableIteratorProxy;
 //# sourceMappingURL=rpc.js.map

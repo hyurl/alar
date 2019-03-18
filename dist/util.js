@@ -6,6 +6,7 @@ const assert_1 = require("assert");
 const pick = require("lodash/pick");
 const omit = require("lodash/omit");
 const startsWith = require("lodash/startsWith");
+const thenable_generator_1 = require("thenable-generator");
 const WinPipe = "\\\\?\\pipe\\";
 exports.local = Symbol("local");
 exports.remotized = Symbol("remotized");
@@ -97,7 +98,7 @@ function createRemoteInstance(mod, fnCreator) {
             let type = typeof ins[prop];
             let isFn = type === "function";
             if (isFn && !ins[prop].proxified) {
-                set(ins, prop, fnCreator(ins, prop));
+                set(ins, prop, mergeFnProperties(fnCreator(prop), ins[prop]));
             }
             return isFn ? ins[prop] : (type === "undefined" ? undefined : null);
         },
@@ -107,4 +108,35 @@ function createRemoteInstance(mod, fnCreator) {
     });
 }
 exports.createRemoteInstance = createRemoteInstance;
+function generable(origin) {
+    return function (...args) {
+        try {
+            let res = origin.apply(this, args);
+            if (res && typeof res[Symbol.asyncIterator] === "function") {
+                return new thenable_generator_1.ThenableAsyncGenerator(res);
+            }
+            else if (res && typeof res[Symbol.iterator] === "function") {
+                return new thenable_generator_1.ThenableGenerator(res);
+            }
+            else {
+                return res;
+            }
+        }
+        catch (err) {
+            throw err;
+        }
+    };
+}
+function createLocalInstance(mod) {
+    return new Proxy(getInstance(mod), {
+        get: (ins, prop) => {
+            if (typeof ins[prop] === "function" && !ins[prop].proxified) {
+                let origin = ins[prop];
+                set(ins, prop, mergeFnProperties(generable(origin), origin));
+            }
+            return ins[prop];
+        }
+    });
+}
+exports.createLocalInstance = createLocalInstance;
 //# sourceMappingURL=util.js.map

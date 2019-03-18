@@ -7,6 +7,7 @@ const objectHash = require("object-hash");
 const path_1 = require("path");
 const js_magic_1 = require("js-magic");
 const util_1 = require("./util");
+const util_2 = require("util");
 const isTsNode = process.execArgv.join(" ").includes("ts-node");
 const defaultLoader = {
     extension: isTsNode ? ".ts" : ".js",
@@ -63,7 +64,7 @@ let ModuleProxyBase = ModuleProxyBase_1 = class ModuleProxyBase {
     instance(route = "") {
         let keys = Object.keys(this.remoteSingletons);
         if (route === util_1.local || !this[util_1.remotized] || (!keys.length && !this[util_1.noLocal])) {
-            return this.singletons[this.name] || (this.singletons[this.name] = util_1.getInstance(this));
+            return this.singletons[this.name] || (this.singletons[this.name] = util_1.createLocalInstance(this));
         }
         else if (keys.length) {
             let id = keys[hash(objectHash(route)) % keys.length];
@@ -78,7 +79,6 @@ let ModuleProxyBase = ModuleProxyBase_1 = class ModuleProxyBase {
         return this;
     }
     remote(route = "") {
-        process.emitWarning("ModuleProxy<T>.route() has been deprecated, use ModuleProxy<T>.instance() instead");
         return this.instance(route);
     }
     __get(prop) {
@@ -103,4 +103,5 @@ ModuleProxyBase = ModuleProxyBase_1 = tslib_1.__decorate([
     js_magic_1.applyMagic
 ], ModuleProxyBase);
 exports.ModuleProxyBase = ModuleProxyBase;
+ModuleProxyBase.prototype.remote = util_2.deprecate(ModuleProxyBase.prototype.remote, "ModuleProxy<T>.route() has been deprecated, use ModuleProxy<T>.instance() instead");
 //# sourceMappingURL=proxy.js.map
