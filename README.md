@@ -209,8 +209,8 @@ remotely will get the new result as expected.
 
 ## Generator Support
 
-Since version 3.3.0, Alar supports generators (and async generators) in both
-local call and remote call contexts.
+Since version 3.3, Alar supports generators (and async generators) in both local
+call and remote call contexts.
 
 ```typescript
 // src/service/user.ts
@@ -228,7 +228,7 @@ export default class User {
         yield "Jane";
         yield "Ben";
         yield "Albert";
-        return "We are budies";
+        return "We are buddies";
     }
 }
 
@@ -249,7 +249,7 @@ export default class User {
     // If want to get the returning value, just call await on the generator.
     // NOTE: this syntax only works with Alar framework, don't use it with 
     // general generators.
-    console.log(await generator); // We are budies
+    console.log(await generator); // We are buddies
 
     // The following usage gets the same result.
 
@@ -265,7 +265,7 @@ export default class User {
         // Jane
         // Ben
         // Albert
-        // We are budies
+        // We are buddies
 
         if (done) {
             break;
