@@ -3,10 +3,13 @@ import * as path from "path";
 import * as fs from "fs-extra";
 import { send, receive } from "bsp";
 import { BiMap } from "advanced-collections";
-import { ThenableAsyncGenerator } from "thenable-generator";
 import isSocketResetError = require("is-socket-reset-error");
 import sleep = require("sleep-promise");
 import sequid from "sequid";
+import {
+    ThenableAsyncGenerator,
+    ThenableAsyncGeneratorLike
+} from "thenable-generator";
 import {
     obj2err,
     err2obj,
@@ -657,9 +660,9 @@ export class RpcClient extends RpcChannel implements ClientOptions {
     }
 }
 
-export class ThenableIteratorProxy {
+export class ThenableIteratorProxy implements ThenableAsyncGeneratorLike {
     readonly taskId: number = this.client["taskId"].next().value;
-    protected status: "uninitiated" | "suspended" | "errored" | "closed" = "uninitiated";
+    protected status: "uninitiated" | "suspended" | "errored" | "closed";
     protected result: any;
     protected args: any[];
 
@@ -669,6 +672,8 @@ export class ThenableIteratorProxy {
         protected method: string,
         ...args: any[]
     ) {
+        this.status = "uninitiated";
+        this.result = void 0;
         this.args = args;
     }
 
@@ -681,11 +686,14 @@ export class ThenableIteratorProxy {
     }
 
     throw(err?: Error) {
-        return this.invokeTask(RpcEvents.THROW, err2obj(err));
+        return this.invokeTask(RpcEvents.THROW, err2obj(err)) as Promise<never>;
     }
 
-    then(resolver: (data: any) => void, rejecter: (err: any) => void) {
-        return this.invokeTask(RpcEvents.AWAIT, ...this.args).then(resolver, rejecter);
+    then(resolver: (data: any) => any, rejecter: (err: any) => any) {
+        return this.invokeTask(
+            RpcEvents.AWAIT,
+            ...this.args
+        ).then(resolver, rejecter);
     }
 
     protected createTimeout(reject: (err: Error) => void) {
@@ -751,8 +759,8 @@ export class ThenableIteratorProxy {
                     // Mark the status to closed, so that any operations on the
                     // current generator after will return the local result 
                     // instead of requesting the remote service again.
-                    delete this.client["tasks"][this.taskId];
                     this.status = "closed";
+                    delete this.client["tasks"][this.taskId];
                 }
 
                 if (event !== RpcEvents.AWAIT && !("value" in res)) {

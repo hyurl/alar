@@ -6,10 +6,10 @@ const path = require("path");
 const fs = require("fs-extra");
 const bsp_1 = require("bsp");
 const advanced_collections_1 = require("advanced-collections");
-const thenable_generator_1 = require("thenable-generator");
 const isSocketResetError = require("is-socket-reset-error");
 const sleep = require("sleep-promise");
 const sequid_1 = require("sequid");
+const thenable_generator_1 = require("thenable-generator");
 const util_1 = require("./util");
 const authorized = Symbol("authorized");
 const lastActiveTime = Symbol("lastActiveTime");
@@ -466,6 +466,7 @@ class ThenableIteratorProxy {
         this.method = method;
         this.taskId = this.client["taskId"].next().value;
         this.status = "uninitiated";
+        this.result = void 0;
         this.args = args;
     }
     next(value) {
@@ -516,8 +517,8 @@ class ThenableIteratorProxy {
             this.status = "suspended";
             return this.prepareTask().then(res => {
                 if (event === RpcEvents.AWAIT || res.done) {
-                    delete this.client["tasks"][this.taskId];
                     this.status = "closed";
+                    delete this.client["tasks"][this.taskId];
                 }
                 if (event !== RpcEvents.AWAIT && !("value" in res)) {
                     res.value = void 0;
