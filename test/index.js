@@ -11,6 +11,7 @@ const Bootstrap = require("./app/bootstrap").default;
 const User = require("./app/service/user").default;
 const config = require("./app/config").default;
 const ChildProcess = require("child_process");
+const net = require("net");
 
 function fork(filename) {
     return new Promise((resolve, reject) => {
@@ -175,6 +176,43 @@ describe("Alar ModuleProxy", () => {
             assert.strictEqual(yield app.service.user.instance().getName(), "Mr. World");
 
             yield client.close();
+            yield server.close();
+            done();
+        });
+    });
+
+    it("should serve an RPC service with secret as expected", (done) => {
+        awaiter(null, null, null, function* () {
+            var _config = Object.assign({ secret: "abcdefg" }, config);
+            var server = yield app.serve(_config);
+
+            server.register(app.service.user);
+
+            var client = yield app.connect(_config);
+
+            client.register(app.service.user);
+
+            assert.strictEqual(yield app.service.user.instance().getName(), "Mr. World");
+
+            yield client.close();
+            yield server.close();
+            done();
+        });
+    });
+
+    it("should refuse connect if secret is incorrect as expected", (done) => {
+        awaiter(null, null, null, function* () {
+            var _config = Object.assign({ secret: "abcdefg" }, config);
+            var server = yield app.serve(_config);
+            let socket = net.createConnection(config.port, config.host);
+            socket.write("12345");
+
+            while (!socket.destroyed) {
+                yield sleep(10);
+            }
+
+            assert.ok(socket.destroyed);
+
             yield server.close();
             done();
         });

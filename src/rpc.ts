@@ -123,7 +123,7 @@ export class RpcServer extends RpcChannel {
 
         for (let [, socket] of this.clients) {
             if (now - socket[lastActiveTime] >= timeout) {
-                this.refuceConnect(
+                this.refuseConnect(
                     socket,
                     "Connection reset due to long-time inactive"
                 );
@@ -133,11 +133,13 @@ export class RpcServer extends RpcChannel {
 
     open(): Promise<this> {
         return new Promise(async (resolve, reject) => {
-            let server: net.Server = this.server = net.createServer(),
-                resolved = false,
-                listener = () => {
-                    (resolved = true) && resolve(this);
-                };
+            let server: net.Server = this.server = net.createServer();
+            let listener = () => {
+                resolve(this);
+                server.on("error", err => {
+                    this.errorHandler && this.errorHandler.call(this, err);
+                });
+            };
 
             if (this.path) { // server IPC (Unix domain socket or Windows named pipe)
                 await fs.ensureDir(path.dirname(this.path));
@@ -156,13 +158,8 @@ export class RpcServer extends RpcChannel {
                 server.listen(this.port, listener);
             }
 
-            server.once("error", err => {
-                !resolved && (resolved = true) && reject(err);
-            }).on("error", err => {
-                if (this.errorHandler && resolved) {
-                    this.errorHandler.call(this, err);
-                }
-            }).on("connection", this.handleConnection.bind(this));
+            server.once("error", reject)
+                .on("connection", this.handleConnection.bind(this));
         });
     }
 
@@ -224,7 +221,7 @@ export class RpcServer extends RpcChannel {
         }
     }
 
-    protected refuceConnect(socket: net.Socket, reason?: string) {
+    protected refuseConnect(socket: net.Socket, reason?: string) {
         socket.destroy(new Error(reason || "UnauthorizedClients connection"));
     }
 
@@ -244,27 +241,33 @@ export class RpcServer extends RpcChannel {
         }).on("close", () => {
             this.clients.deleteValue(socket);
         }).on("data", async (buf) => {
+            if (!socket[authorized]) {
+                if (this.secret) {
+                    let index = buf.indexOf("\r\n");
+                    let secret = buf.slice(0, index).toString();
+
+                    if (secret !== this.secret) {
+                        return this.refuseConnect(socket);
+                    } else {
+                        buf = buf.slice(index + 2);
+                    }
+                }
+
+                socket[authorized] = true;
+            }
+
+            socket[lastActiveTime] = Date.now();
+
             let msg = receive<Request>(buf, temp);
 
             for (let [event, taskId, name, method, ...args] of msg) {
-                if (event !== RpcEvents.HANDSHAKE && !socket[authorized]) {
-                    return this.refuceConnect(socket);
-                } else {
-                    socket[lastActiveTime] = Date.now();
-                }
-
                 switch (event) {
                     case RpcEvents.HANDSHAKE:
-                        if ((!name && !this.secret) || name === this.secret) {
-                            socket[authorized] = true;
-                            this.clients.set(<string>taskId, socket);
-                            this.suspendedTasks.set(socket, {});
-                            // Send CONNECT event to notify the client that the 
-                            // connection is finished.
-                            this.dispatch(socket, RpcEvents.CONNECT, name);
-                        } else {
-                            this.refuceConnect(socket);
-                        }
+                        this.clients.set(<string>taskId, socket);
+                        this.suspendedTasks.set(socket, {});
+                        // Send CONNECT event to notify the client that the 
+                        // connection is finished.
+                        this.dispatch(socket, RpcEvents.CONNECT);
                         break;
 
                     case RpcEvents.PING:
@@ -454,7 +457,9 @@ export class RpcClient extends RpcChannel implements ClientOptions {
                     this.connected = true;
                     resolve(this);
                 };
-                this.send(RpcEvents.HANDSHAKE, this.id, this.secret);
+                this.socket.write((this.secret || "") + "\r\n", () => {
+                    this.send(RpcEvents.HANDSHAKE, this.id);
+                });
             };
             let errorListener = (err: Error) => {
                 this.connecting = false;
