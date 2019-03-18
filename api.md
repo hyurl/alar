@@ -153,9 +153,13 @@ json.setLoader({
 
 ```typescript
 interface RpcOptions {
+    [x: string]: any,
     host?: string;
     port?: number;
     path?: string;
+    secret?: string;
+    timeout?: number;
+    pingTimeout?: number;
 }
 ```
 
@@ -163,6 +167,25 @@ If `path` is provided (equivalent to `ModuleProxy.serve(config: string)` and
 `ModuleProxy.connect(config: string)`), the RPC channel will be bound to an IPC 
 channel. Otherwise, the RPC channel will be bound a network channel according to
 the `host` and `port`.
+
+By default `timeout` is set `5000`ms. On the client, it works both in connection
+and IPC requests. The client provides internal support of re-connection, if a
+remote service is disconnected e.g. the server shutdown (even manually), the 
+traffic will be redirected to other online services, and the client will try to
+reconnect repeatedly in the background (according to `timeout`).
+
+On the server, the `timeout` is used to set the interval timer of garbage 
+collection. Every time the garbage collector runs, it will check if there are
+any long-time inactive connections, if a connection is inactive longer than 
+`pingTimeout`, then it'll be recycled, and any suspended tasks bound to the
+connection will be canceled as well.
+
+The client also uses `pingTimeout` to set the interval timer of ping 
+function, once a PING signal is sent, the server will return a PONG signal and
+refresh the last active time of the connection (any operation will do that too).
+However if the server failed to response a PONG after `timeout`, the client will
+think the server is down or something is wrong with the connection, and it will
+destroy the current connection immediately in order to create a new one.
 
 # RpcChannel
 
@@ -205,18 +228,11 @@ The server implementation of the RPC channel.
 ```typescript
 interface ClientOptions extends RpcOptions {
     id?: string;
-    timeout?: number;
 }
 ```
 
 The `id` is used for the server publishing events to specified clients, if not 
-provided, a random string will be generated. By default `timeout` is set 
-`5000`ms, works both in connection and IPC requests.
-
-The client provides internal support of re-connection, if a remote service is 
-disconnected e.g. the server shutdown (even manually), the traffic will be 
-redirected to other online services, and the client will try to reconnect 
-repeatedly in the background (according to `timeout`).
+provided, a random string will be generated.
 
 # RpcClient
 
