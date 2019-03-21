@@ -271,7 +271,7 @@ export default class User {
             break;
         }
     }
-});
+})();
 ```
 
 For more details, please check the [API documentation](./api.md).

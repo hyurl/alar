@@ -112,7 +112,6 @@ export abstract class RpcChannel implements RpcOptions {
 }
 
 export class RpcServer extends RpcChannel {
-    readonly timeout: number;
     protected server: net.Server;
     protected registry: { [name: string]: ModuleProxy<any> } = {};
     protected clients = new BiMap<string, net.Socket>();
@@ -374,8 +373,8 @@ export class RpcServer extends RpcChannel {
 }
 
 export class RpcClient extends RpcChannel implements ClientOptions {
+    /** The unique ID of the client, useful for the server publishing events. */
     id: string;
-    timeout: number;
     /** Whether the channel is in connecting state. */
     connecting = false;
     /** Whether the channel is connected. */
