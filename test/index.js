@@ -518,6 +518,7 @@ describe("Alar ModuleProxy", () => {
             }
 
             assert.deepStrictEqual(result, ["Mozilla", "GitHub", "Linux", ["Open Source", "Good Fella"]]);
+            assert.deepStrictEqual(yield generator, ["Open Source", "Good Fella"]);
             done();
         });
     });
