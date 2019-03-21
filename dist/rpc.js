@@ -463,6 +463,7 @@ class ThenableIteratorProxy {
         this.name = name;
         this.method = method;
         this.taskId = this.client["taskId"].next().value;
+        this.queue = [];
         this.status = "uninitiated";
         this.result = void 0;
         this.args = args;
@@ -479,29 +480,49 @@ class ThenableIteratorProxy {
     then(resolver, rejecter) {
         return this.invokeTask(RpcEvents.AWAIT, ...this.args).then(resolver, rejecter);
     }
-    createTimeout(reject) {
+    rejectAll(err) {
+        let task;
+        while (task = this.queue.shift()) {
+            task.rejecter(err);
+        }
+    }
+    createTimeout() {
         return setTimeout(() => {
             let num = Math.round(this.client.timeout / 1000);
             let unit = num === 1 ? "second" : "seconds";
-            reject(new Error(`RPC request timeout after ${num} ${unit}`));
+            this.rejectAll(new Error(`RPC request timeout after ${num} ${unit}`));
         }, this.client.timeout);
     }
     ;
     prepareTask() {
         let task = this.client["tasks"][this.taskId];
         if (!task) {
-            task = this.client["tasks"][this.taskId] = {};
+            task = this.client["tasks"][this.taskId] = {
+                resolve: (data) => {
+                    if (this.status === "suspended") {
+                        this.queue.shift().resolver(data);
+                    }
+                },
+                reject: (err) => {
+                    if (this.status === "suspended") {
+                        this.status = "errored";
+                        this.rejectAll(err);
+                    }
+                }
+            };
         }
         return new Promise((resolve, reject) => {
-            let timer = this.createTimeout(reject);
-            task.resolve = (data) => {
-                clearTimeout(timer);
-                resolve(data);
-            };
-            task.reject = (err) => {
-                clearTimeout(timer);
-                reject(err);
-            };
+            let timer = this.createTimeout();
+            this.queue.push({
+                resolver: (data) => {
+                    clearTimeout(timer);
+                    resolve(data);
+                },
+                rejecter: (err) => {
+                    clearTimeout(timer);
+                    reject(err);
+                }
+            });
         });
     }
     invokeTask(event, ...args) {
@@ -525,6 +546,7 @@ class ThenableIteratorProxy {
             }).catch(err => {
                 this.status = "errored";
                 this.result = err;
+                delete this.client["tasks"][this.taskId];
                 throw err;
             });
         }

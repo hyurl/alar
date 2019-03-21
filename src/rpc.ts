@@ -24,8 +24,8 @@ const lastActiveTime = Symbol("lastActiveTime");
 type Request = [number, number | string, string?, string?, ...any[]];
 type Response = [number, number | string, any];
 type Task = {
-    resolve?: (data: any) => void,
-    reject?: (err: Error) => void
+    resolve: (data: any) => void,
+    reject: (err: Error) => void
 };
 type Subscriber = (data: any) => void | Promise<void>;
 enum RpcEvents {
@@ -659,6 +659,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
 class ThenableIteratorProxy implements ThenableAsyncGeneratorLike {
     readonly taskId: number = this.client["taskId"].next().value;
     protected status: "uninitiated" | "suspended" | "errored" | "closed";
+    protected queue: Array<{ resolver: Function, rejecter: Function }> = [];
     protected result: any;
     protected args: any[];
 
@@ -692,12 +693,21 @@ class ThenableIteratorProxy implements ThenableAsyncGeneratorLike {
         ).then(resolver, rejecter);
     }
 
-    protected createTimeout(reject: (err: Error) => void) {
+    protected rejectAll(err: any) {
+        // If any error occurs, invoke all the error rejecter at once.
+        let task: { resolver: Function, rejecter: Function };
+
+        while (task = this.queue.shift()) {
+            task.rejecter(err);
+        }
+    }
+
+    protected createTimeout() {
         return setTimeout(() => {
             let num = Math.round(this.client.timeout / 1000);
             let unit = num === 1 ? "second" : "seconds";
 
-            reject(new Error(`RPC request timeout after ${num} ${unit}`));
+            this.rejectAll(new Error(`RPC request timeout after ${num} ${unit}`));
         }, this.client.timeout);
     };
 
@@ -705,22 +715,37 @@ class ThenableIteratorProxy implements ThenableAsyncGeneratorLike {
         let task: Task = this.client["tasks"][this.taskId];
 
         if (!task) {
-            task = this.client["tasks"][this.taskId] = {};
+            task = this.client["tasks"][this.taskId] = {
+                resolve: (data: any) => {
+                    if (this.status === "suspended") {
+                        this.queue.shift().resolver(data);
+                    }
+                },
+                reject: (err: any) => {
+                    if (this.status === "suspended") {
+                        this.status = "errored";
+                        this.rejectAll(err);
+                    }
+                }
+            };
         }
 
         // Pack every request as Promise, and assign the resolver and rejecter 
         // to the task, so that when the result or any error is received, 
         // then can be called correctly.
         return new Promise((resolve, reject) => {
-            let timer = this.createTimeout(reject);
-            task.resolve = (data: any) => {
-                clearTimeout(timer);
-                resolve(data);
-            };
-            task.reject = (err: Error) => {
-                clearTimeout(timer);
-                reject(err);
-            };
+            let timer = this.createTimeout();
+
+            this.queue.push({
+                resolver: (data: any) => {
+                    clearTimeout(timer);
+                    resolve(data);
+                },
+                rejecter: (err: any) => {
+                    clearTimeout(timer);
+                    reject(err);
+                }
+            });
         });
     }
 
@@ -770,6 +795,7 @@ class ThenableIteratorProxy implements ThenableAsyncGeneratorLike {
                 // instead of requesting the remote service again.
                 this.status = "errored";
                 this.result = err;
+                delete this.client["tasks"][this.taskId];
 
                 throw err;
             });
