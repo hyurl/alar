@@ -31,6 +31,10 @@ exports.default = class User {
         throw new MyError("something went wrong");
     }
 
+    nonStandardError() {
+        throw "something went wrong";
+    }
+
     static getInstance() {
         return new this("Mr. World");
     }

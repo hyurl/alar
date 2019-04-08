@@ -592,4 +592,29 @@ describe("Alar ModuleProxy", () => {
             done();
         });
     });
+
+    it("should transmit a non-standard error as expected", (done) => {
+        awaiter(null, null, null, function* () {
+            var server = yield app.serve(config);
+            var client = yield app.connect(config);
+
+            server.register(app.service.user);
+            client.register(app.service.user);
+            alar.RpcChannel.registerError(MyError);
+
+            let err;
+
+            try {
+                yield app.service.user.instance().nonStandardError();
+            } catch (e) {
+                err = e;
+            }
+
+            assert.strictEqual(err, "something went wrong");
+
+            yield client.close();
+            yield server.close();
+            done();
+        });
+    });
 });

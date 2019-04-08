@@ -67,13 +67,20 @@ export function getInstance<T>(mod: ModuleProxy<T>, instantiate = true): T {
     return ins;
 }
 
-export function err2obj(err: ErrorObject): ErrorObject {
+export function err2obj(err: any): ErrorObject {
     if (!(err instanceof Error)) return err;
 
     return <any>Object.assign({}, pick(err, ErrorProps), omit(err, ErrorProps));
 }
 
-export function obj2err(obj: ErrorObject): ErrorObject {
+export function obj2err(obj: any): ErrorObject {
+    if (typeof obj !== "object" ||
+        !("name" in obj) ||
+        !("message" in obj) ||
+        !("stack" in obj)) {
+        return obj;
+    }
+
     let err = Object.create((Errors[obj.name] || Error).prototype);
 
     for (let prop in obj) {

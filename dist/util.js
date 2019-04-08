@@ -69,6 +69,12 @@ function err2obj(err) {
 }
 exports.err2obj = err2obj;
 function obj2err(obj) {
+    if (typeof obj !== "object" ||
+        !("name" in obj) ||
+        !("message" in obj) ||
+        !("stack" in obj)) {
+        return obj;
+    }
     let err = Object.create((exports.Errors[obj.name] || Error).prototype);
     for (let prop in obj) {
         if (ErrorProps.indexOf(prop) >= 0) {
