@@ -1,4 +1,5 @@
 const MyError = require("../../error").default;
+const data = require("../../data").default;
 
 exports.default = class User {
     constructor(name) {
@@ -33,6 +34,14 @@ exports.default = class User {
 
     nonStandardError() {
         throw "something went wrong";
+    }
+
+    setTime(time) {
+        data.time = time;
+    }
+
+    setAndGet(data) {
+        return data;
     }
 
     static getInstance() {

@@ -9,6 +9,7 @@ const advanced_collections_1 = require("advanced-collections");
 const isSocketResetError = require("is-socket-reset-error");
 const sleep = require("sleep-promise");
 const sequid_1 = require("sequid");
+const isIteratorLike = require("is-iterator-like");
 const thenable_generator_1 = require("thenable-generator");
 const util_1 = require("./util");
 const authorized = Symbol("authorized");
@@ -18,7 +19,7 @@ var RpcEvents;
     RpcEvents[RpcEvents["HANDSHAKE"] = 0] = "HANDSHAKE";
     RpcEvents[RpcEvents["CONNECT"] = 1] = "CONNECT";
     RpcEvents[RpcEvents["BROADCAST"] = 2] = "BROADCAST";
-    RpcEvents[RpcEvents["AWAIT"] = 3] = "AWAIT";
+    RpcEvents[RpcEvents["INVOKE"] = 3] = "INVOKE";
     RpcEvents[RpcEvents["RETURN"] = 4] = "RETURN";
     RpcEvents[RpcEvents["YIELD"] = 5] = "YIELD";
     RpcEvents[RpcEvents["THROW"] = 6] = "THROW";
@@ -189,22 +190,21 @@ class RpcServer extends RpcChannel {
                     case RpcEvents.PING:
                         this.dispatch(socket, RpcEvents.PONG);
                         break;
-                    case RpcEvents.AWAIT:
+                    case RpcEvents.INVOKE:
                         {
                             let data;
                             let tasks = this.suspendedTasks.get(socket) || {};
-                            let task = tasks[taskId];
                             try {
-                                if (task) {
-                                    delete tasks[taskId];
+                                let ins = this.registry[name].instance(util_1.local);
+                                let task = ins[method].apply(ins, args);
+                                if (task && isIteratorLike(task[thenable_generator_1.source])) {
+                                    tasks[taskId] = task;
+                                    event = RpcEvents.INVOKE;
                                 }
                                 else {
-                                    let ins = this.registry[name].instance(util_1.local);
-                                    let source = ins[method].apply(ins, args);
-                                    task = new thenable_generator_1.ThenableAsyncGenerator(source);
+                                    data = yield task;
+                                    event = RpcEvents.RETURN;
                                 }
-                                data = yield task;
-                                event = RpcEvents.RETURN;
                             }
                             catch (err) {
                                 event = RpcEvents.THROW;
@@ -222,11 +222,7 @@ class RpcServer extends RpcChannel {
                             let task = tasks[taskId];
                             try {
                                 if (!task) {
-                                    let ins = this.registry[name].instance(util_1.local);
-                                    let source = ins[method].apply(ins, args[0]);
-                                    input = args[1];
-                                    task = new thenable_generator_1.ThenableAsyncGenerator(source);
-                                    tasks[taskId] = task;
+                                    throw new ReferenceError(`task ${taskId} doesn't exist`);
                                 }
                                 else {
                                     input = args[0];
@@ -306,6 +302,7 @@ class RpcClient extends RpcChannel {
                             yield handle(data);
                         }
                         break;
+                    case RpcEvents.INVOKE:
                     case RpcEvents.YIELD:
                     case RpcEvents.RETURN:
                         if (task = this.tasks[taskId]) {
@@ -468,8 +465,8 @@ class ThenableIteratorProxy {
         this.taskId = this.client["taskId"].next().value;
         this.queue = [];
         this.status = "uninitiated";
-        this.result = void 0;
         this.args = args;
+        this.result = this.invokeTask(RpcEvents.INVOKE, ...this.args);
     }
     next(value) {
         return this.invokeTask(RpcEvents.YIELD, value);
@@ -481,13 +478,18 @@ class ThenableIteratorProxy {
         return this.invokeTask(RpcEvents.THROW, util_1.err2obj(err));
     }
     then(resolver, rejecter) {
-        return this.invokeTask(RpcEvents.AWAIT, ...this.args).then(resolver, rejecter);
+        return Promise.resolve(this.result).then((res) => {
+            this.status = "closed";
+            this.result = res;
+            delete this.client["tasks"][this.taskId];
+            return res;
+        }).then(resolver, rejecter);
     }
     close() {
         this.status = "closed";
         for (let task of this.queue) {
             switch (task.event) {
-                case RpcEvents.AWAIT:
+                case RpcEvents.INVOKE:
                     task.resolve(void 0);
                     break;
                 case RpcEvents.YIELD:
@@ -553,7 +555,7 @@ class ThenableIteratorProxy {
     invokeTask(event, ...args) {
         if (this.status === "closed") {
             switch (event) {
-                case RpcEvents.AWAIT:
+                case RpcEvents.INVOKE:
                     return Promise.resolve(this.result);
                 case RpcEvents.YIELD:
                     return Promise.resolve({ value: undefined, done: true });
@@ -564,7 +566,7 @@ class ThenableIteratorProxy {
             }
         }
         else {
-            if (this.status === "uninitiated" && event !== RpcEvents.AWAIT) {
+            if (this.status === "uninitiated" && event !== RpcEvents.INVOKE) {
                 this.client.send(event, this.taskId, this.name, this.method, [...this.args], ...args);
             }
             else {
@@ -572,18 +574,13 @@ class ThenableIteratorProxy {
             }
             this.status = "suspended";
             return this.prepareTask(event, args[0]).then(res => {
-                if (event === RpcEvents.AWAIT || res.done) {
-                    this.status = "closed";
-                    delete this.client["tasks"][this.taskId];
-                    if (event === RpcEvents.AWAIT) {
-                        this.result = res;
-                    }
-                    else {
+                if (event !== RpcEvents.INVOKE) {
+                    ("value" in res) || (res.value = void 0);
+                    if (res.done) {
+                        this.status = "closed";
                         this.result = res.value;
+                        delete this.client["tasks"][this.taskId];
                     }
-                }
-                if (event !== RpcEvents.AWAIT && !("value" in res)) {
-                    res.value = void 0;
                 }
                 return res;
             }).catch(err => {

@@ -6,7 +6,9 @@ import { BiMap } from "advanced-collections";
 import isSocketResetError = require("is-socket-reset-error");
 import sleep = require("sleep-promise");
 import sequid from "sequid";
+import isIteratorLike = require("is-iterator-like");
 import {
+    source,
     ThenableAsyncGenerator,
     ThenableAsyncGeneratorLike
 } from "thenable-generator";
@@ -33,7 +35,7 @@ enum RpcEvents {
     HANDSHAKE,
     CONNECT,
     BROADCAST,
-    AWAIT,
+    INVOKE,
     RETURN,
     YIELD,
     THROW,
@@ -286,29 +288,24 @@ export class RpcServer extends RpcChannel {
                         this.dispatch(socket, RpcEvents.PONG);
                         break;
 
-                    case RpcEvents.AWAIT:
+                    case RpcEvents.INVOKE:
                         {
                             let data: any;
                             let tasks = this.suspendedTasks.get(socket) || {};
-                            let task: ThenableAsyncGenerator = tasks[taskId];
 
                             try {
-                                if (task) {
-                                    delete tasks[taskId];
+                                // Connect to the singleton instance and 
+                                // invokes it's method to handle the request.
+                                let ins = this.registry[name].instance(local);
+                                let task = ins[method].apply(ins, args);
+
+                                if (task && isIteratorLike(task[source])) {
+                                    tasks[taskId] = task;
+                                    event = RpcEvents.INVOKE;
                                 } else {
-                                    // Connect to the singleton instance and 
-                                    // invokes it's method to handle the request.
-                                    let ins = this.registry[name].instance(local);
-                                    let source = ins[method].apply(ins, args);
-
-                                    // Pack the result to a ThenableAsyncGenerator
-                                    // so that it can be awaited to get the final
-                                    // result even if it's a generator.
-                                    task = new ThenableAsyncGenerator(source);
+                                    data = await task;
+                                    event = RpcEvents.RETURN;
                                 }
-
-                                data = await task;
-                                event = RpcEvents.RETURN;
                             } catch (err) {
                                 event = RpcEvents.THROW;
                                 data = err2obj(err);
@@ -329,22 +326,9 @@ export class RpcServer extends RpcChannel {
 
                             try {
                                 if (!task) {
-                                    // If the function hasn't be initiated, then
-                                    // invoke it immediately, the client should
-                                    // send the arguments for invoking as well
-                                    // and put them in a individual array before 
-                                    // the argument used to call the generator's
-                                    // methods.
-                                    let ins = this.registry[name].instance(local);
-                                    let source = ins[method].apply(ins, args[0]);
-
-                                    input = args[1];
-
-                                    // Pack the result to a ThenableAsyncGenerator
-                                    // so that it can be used as a generator
-                                    //  even if it's not a generator.
-                                    task = new ThenableAsyncGenerator(source);
-                                    tasks[taskId] = task;
+                                    throw new ReferenceError(
+                                        `task ${taskId} doesn't exist`
+                                    );
                                 } else {
                                     input = args[0];
                                 }
@@ -372,6 +356,7 @@ export class RpcServer extends RpcChannel {
                             this.dispatch(socket, event, taskId, data);
                         }
                         break;
+
                 }
             }
         });
@@ -456,6 +441,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
 
                     // When receiving response from the server, resolve 
                     // immediately.
+                    case RpcEvents.INVOKE:
                     case RpcEvents.YIELD:
                     case RpcEvents.RETURN:
                         if (task = this.tasks[taskId]) {
@@ -680,8 +666,13 @@ class ThenableIteratorProxy implements ThenableAsyncGeneratorLike {
         ...args: any[]
     ) {
         this.status = "uninitiated";
-        this.result = void 0;
+        // this.result = void 0;
         this.args = args;
+
+        // Initiate the task immediately when the remote method is called, this
+        // operation will create a individual task, it will either be awaited as
+        // a promise or iterated as a iterator.
+        this.result = this.invokeTask(RpcEvents.INVOKE, ...this.args);
     }
 
     next(value?: any) {
@@ -697,10 +688,20 @@ class ThenableIteratorProxy implements ThenableAsyncGeneratorLike {
     }
 
     then(resolver: (data: any) => any, rejecter: (err: any) => any) {
-        return this.invokeTask(
-            RpcEvents.AWAIT,
-            ...this.args
-        ).then(resolver, rejecter);
+        return Promise.resolve(this.result).then((res) => {
+            // Mark the status to closed, so that any operations on the current
+            // generator after will return the local result instead of
+            // requesting the remote service again.
+            this.status = "closed";
+            this.result = res;
+
+            // With INVOKE event, the task will finish immediately after
+            // awaiting the response, once a task is finished, it should be 
+            // removed from the list right away.
+            delete this.client["tasks"][this.taskId];
+
+            return res;
+        }).then(resolver, rejecter);
     }
 
     protected close() {
@@ -708,7 +709,7 @@ class ThenableIteratorProxy implements ThenableAsyncGeneratorLike {
 
         for (let task of this.queue) {
             switch (task.event) {
-                case RpcEvents.AWAIT:
+                case RpcEvents.INVOKE:
                     task.resolve(void 0);
                     break;
 
@@ -792,7 +793,7 @@ class ThenableIteratorProxy implements ThenableAsyncGeneratorLike {
     protected invokeTask(event: RpcEvents, ...args: any[]): Promise<any> {
         if (this.status === "closed") {
             switch (event) {
-                case RpcEvents.AWAIT:
+                case RpcEvents.INVOKE:
                     return Promise.resolve(this.result);
 
                 case RpcEvents.YIELD:
@@ -805,7 +806,7 @@ class ThenableIteratorProxy implements ThenableAsyncGeneratorLike {
                     return Promise.reject(obj2err(args[0]));
             }
         } else {
-            if (this.status === "uninitiated" && event !== RpcEvents.AWAIT) {
+            if (this.status === "uninitiated" && event !== RpcEvents.INVOKE) {
                 // If in a generator call and the generator hasn't been 
                 // initiated, send the request with arguments for initiation on
                 // the server.
@@ -830,24 +831,14 @@ class ThenableIteratorProxy implements ThenableAsyncGeneratorLike {
             this.status = "suspended";
 
             return this.prepareTask(event, args[0]).then(res => {
-                if (event === RpcEvents.AWAIT || res.done) {
-                    // Mark the status to closed, so that any operations on the
-                    // current generator after will return the local result 
-                    // instead of requesting the remote service again.
-                    this.status = "closed";
-                    delete this.client["tasks"][this.taskId];
+                if (event !== RpcEvents.INVOKE) {
+                    ("value" in res) || (res.value = void 0);
 
-                    // The result should only store the returning value of the
-                    // target function.
-                    if (event === RpcEvents.AWAIT) {
-                        this.result = res;
-                    } else {
+                    if (res.done) {
+                        this.status = "closed";
                         this.result = res.value;
+                        delete this.client["tasks"][this.taskId];
                     }
-                }
-
-                if (event !== RpcEvents.AWAIT && !("value" in res)) {
-                    res.value = void 0;
                 }
 
                 return res;

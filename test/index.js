@@ -13,6 +13,7 @@ const config = require("./app/config").default;
 const ChildProcess = require("child_process");
 const net = require("net");
 const MyError = require("./error").default;
+const data = require("./data").default;
 
 function fork(filename) {
     return new Promise((resolve, reject) => {
@@ -611,6 +612,50 @@ describe("Alar ModuleProxy", () => {
             }
 
             assert.strictEqual(err, "something went wrong");
+
+            yield client.close();
+            yield server.close();
+            done();
+        });
+    });
+
+    it("should invoke the remote method in the background as expected", (done) => {
+        awaiter(null, null, null, function* () {
+            var server = yield app.serve(config);
+            var client = yield app.connect(config);
+
+            server.register(app.service.user);
+            client.register(app.service.user);
+
+            let time = Date.now();
+
+            app.service.user.instance().setTime(time);
+
+            while (!data.time) {
+                yield sleep(10);
+            }
+
+            assert.strictEqual(data.time, time);
+
+            yield client.close();
+            yield server.close();
+            done();
+        });
+    });
+
+    it("should invoke the remote method await it after a while as expected", (done) => {
+        awaiter(null, null, null, function* () {
+            var server = yield app.serve(config);
+            var client = yield app.connect(config);
+
+            server.register(app.service.user);
+            client.register(app.service.user);
+
+            let promise = app.service.user.instance().setAndGet("Hello, World!");
+
+            yield sleep(50);
+
+            assert.strictEqual(yield promise, "Hello, World!");
 
             yield client.close();
             yield server.close();

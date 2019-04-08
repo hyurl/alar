@@ -254,10 +254,10 @@ export default class User {
     // The following usage gets the same result.
 
     let generator2 = app.service.user.instance().getFriends();
-    
+
     while (true) {
         let { value, done } = await generator2.next();
-        
+
         console.log(value);
         // NOTE: calling next() will return the returning value of the generator
         // as well, so the output would be:
