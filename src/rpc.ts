@@ -327,7 +327,7 @@ export class RpcServer extends RpcChannel {
                             try {
                                 if (!task) {
                                     throw new ReferenceError(
-                                        `task ${taskId} doesn't exist`
+                                        `task (${taskId}) doesn't exist`
                                     );
                                 } else {
                                     input = args[0];

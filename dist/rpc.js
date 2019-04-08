@@ -222,7 +222,7 @@ class RpcServer extends RpcChannel {
                             let task = tasks[taskId];
                             try {
                                 if (!task) {
-                                    throw new ReferenceError(`task ${taskId} doesn't exist`);
+                                    throw new ReferenceError(`task (${taskId}) doesn't exist`);
                                 }
                                 else {
                                     input = args[0];
