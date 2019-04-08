@@ -466,6 +466,7 @@ class ThenableIteratorProxy {
         this.name = name;
         this.method = method;
         this.taskId = this.client["taskId"].next().value;
+        this.queue = [];
         this.status = "uninitiated";
         this.result = void 0;
         this.args = args;
@@ -482,33 +483,87 @@ class ThenableIteratorProxy {
     then(resolver, rejecter) {
         return this.invokeTask(RpcEvents.AWAIT, ...this.args).then(resolver, rejecter);
     }
-    createTimeout(reject) {
+    close() {
+        this.status = "closed";
+        for (let task of this.queue) {
+            switch (task.event) {
+                case RpcEvents.AWAIT:
+                    task.resolve(void 0);
+                    break;
+                case RpcEvents.YIELD:
+                    task.resolve({ value: void 0, done: true });
+                    break;
+                case RpcEvents.RETURN:
+                    task.resolve({ value: task.data, done: true });
+                    break;
+                case RpcEvents.THROW:
+                    task.reject(task.data);
+                    break;
+            }
+        }
+        this.queue = [];
+    }
+    createTimeout() {
         return setTimeout(() => {
             let num = Math.round(this.client.timeout / 1000);
             let unit = num === 1 ? "second" : "seconds";
-            reject(new Error(`RPC request timeout after ${num} ${unit}`));
+            if (this.queue.length > 0) {
+                this.queue.shift().reject(new Error(`RPC request timeout after ${num} ${unit}`));
+            }
+            this.close();
         }, this.client.timeout);
     }
-    ;
-    prepareTask() {
+    prepareTask(event, data) {
         let task = this.client["tasks"][this.taskId];
         if (!task) {
-            task = this.client["tasks"][this.taskId] = {};
+            task = this.client["tasks"][this.taskId] = {
+                resolve: (data) => {
+                    if (this.status === "suspended") {
+                        if (this.queue.length > 0) {
+                            this.queue.shift().resolve(data);
+                        }
+                    }
+                },
+                reject: (err) => {
+                    if (this.status === "suspended") {
+                        if (this.queue.length > 0) {
+                            this.queue.shift().reject(err);
+                        }
+                        this.close();
+                    }
+                }
+            };
         }
         return new Promise((resolve, reject) => {
-            let timer = this.createTimeout(reject);
-            task.resolve = (data) => {
-                clearTimeout(timer);
-                resolve(data);
-            };
-            task.reject = (err) => {
-                clearTimeout(timer);
-                reject(err);
-            };
+            let timer = this.createTimeout();
+            this.queue.push({
+                event,
+                data,
+                resolve: (data) => {
+                    clearTimeout(timer);
+                    resolve(data);
+                },
+                reject: (err) => {
+                    clearTimeout(timer);
+                    reject(err);
+                }
+            });
         });
     }
     invokeTask(event, ...args) {
-        if (this.status === "uninitiated" || this.status === "suspended") {
+        if (this.status === "closed") {
+            switch (event) {
+                case RpcEvents.AWAIT:
+                    return Promise.resolve(this.result);
+                case RpcEvents.YIELD:
+                    return Promise.resolve({ value: undefined, done: true });
+                case RpcEvents.RETURN:
+                    return Promise.resolve({ value: args[0], done: true });
+                case RpcEvents.THROW:
+                    return Promise.reject(util_1.obj2err(args[0]));
+            }
+        }
+        else {
             if (this.status === "uninitiated" && event !== RpcEvents.AWAIT) {
                 this.client.send(event, this.taskId, this.name, this.method, [...this.args], ...args);
             }
@@ -516,26 +571,26 @@ class ThenableIteratorProxy {
                 this.client.send(event, this.taskId, this.name, this.method, ...args);
             }
             this.status = "suspended";
-            return this.prepareTask().then(res => {
+            return this.prepareTask(event, args[0]).then(res => {
                 if (event === RpcEvents.AWAIT || res.done) {
                     this.status = "closed";
                     delete this.client["tasks"][this.taskId];
+                    if (event === RpcEvents.AWAIT) {
+                        this.result = res;
+                    }
+                    else {
+                        this.result = res.value;
+                    }
                 }
                 if (event !== RpcEvents.AWAIT && !("value" in res)) {
                     res.value = void 0;
                 }
-                return (this.result = res);
+                return res;
             }).catch(err => {
-                this.status = "errored";
-                this.result = err;
+                this.status = "closed";
+                delete this.client["tasks"][this.taskId];
                 throw err;
             });
-        }
-        else if (this.status === "closed") {
-            return Promise.resolve(this.result);
-        }
-        else {
-            return Promise.reject(args[0]);
         }
     }
 }

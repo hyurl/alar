@@ -25,8 +25,8 @@ const lastActiveTime = Symbol("lastActiveTime");
 type Request = [number, number | string, string?, string?, ...any[]];
 type Response = [number, number | string, any];
 type Task = {
-    resolve?: (data: any) => void,
-    reject?: (err: Error) => void
+    resolve: (data: any) => void,
+    reject: (err: Error) => void
 };
 type Subscriber = (data: any) => void | Promise<void>;
 enum RpcEvents {
@@ -663,9 +663,15 @@ export class RpcClient extends RpcChannel implements ClientOptions {
 
 class ThenableIteratorProxy implements ThenableAsyncGeneratorLike {
     readonly taskId: number = this.client["taskId"].next().value;
-    protected status: "uninitiated" | "suspended" | "errored" | "closed";
+    protected status: "uninitiated" | "suspended" | "closed";
     protected result: any;
     protected args: any[];
+    protected queue: Array<{
+        event: RpcEvents,
+        data?: any,
+        resolve: Function,
+        reject: Function
+    }> = [];
 
     constructor(
         protected client: RpcClient,
@@ -697,40 +703,108 @@ class ThenableIteratorProxy implements ThenableAsyncGeneratorLike {
         ).then(resolver, rejecter);
     }
 
-    protected createTimeout(reject: (err: Error) => void) {
+    protected close() {
+        this.status = "closed";
+
+        for (let task of this.queue) {
+            switch (task.event) {
+                case RpcEvents.AWAIT:
+                    task.resolve(void 0);
+                    break;
+
+                case RpcEvents.YIELD:
+                    task.resolve({ value: void 0, done: true });
+                    break;
+
+                case RpcEvents.RETURN:
+                    task.resolve({ value: task.data, done: true });
+                    break;
+
+                case RpcEvents.THROW:
+                    task.reject(task.data);
+                    break;
+            }
+        }
+
+        this.queue = [];
+    }
+
+    protected createTimeout() {
         return setTimeout(() => {
             let num = Math.round(this.client.timeout / 1000);
             let unit = num === 1 ? "second" : "seconds";
 
-            reject(new Error(`RPC request timeout after ${num} ${unit}`));
-        }, this.client.timeout);
-    };
+            if (this.queue.length > 0) {
+                this.queue.shift().reject(new Error(
+                    `RPC request timeout after ${num} ${unit}`
+                ));
+            }
 
-    protected prepareTask(): Promise<any> {
+            this.close();
+        }, this.client.timeout);
+    }
+
+    protected prepareTask(event: RpcEvents, data?: any): Promise<any> {
         let task: Task = this.client["tasks"][this.taskId];
 
         if (!task) {
-            task = this.client["tasks"][this.taskId] = {};
+            task = this.client["tasks"][this.taskId] = {
+                resolve: (data: any) => {
+                    if (this.status === "suspended") {
+                        if (this.queue.length > 0) {
+                            this.queue.shift().resolve(data);
+                        }
+                    }
+                },
+                reject: (err: any) => {
+                    if (this.status === "suspended") {
+                        if (this.queue.length > 0) {
+                            this.queue.shift().reject(err);
+                        }
+
+                        this.close();
+                    }
+                }
+            };
         }
 
         // Pack every request as Promise, and assign the resolver and rejecter 
         // to the task, so that when the result or any error is received, 
         // then can be called correctly.
         return new Promise((resolve, reject) => {
-            let timer = this.createTimeout(reject);
-            task.resolve = (data: any) => {
-                clearTimeout(timer);
-                resolve(data);
-            };
-            task.reject = (err: Error) => {
-                clearTimeout(timer);
-                reject(err);
-            };
+            let timer = this.createTimeout();
+
+            this.queue.push({
+                event,
+                data,
+                resolve: (data: any) => {
+                    clearTimeout(timer);
+                    resolve(data);
+                },
+                reject: (err: any) => {
+                    clearTimeout(timer);
+                    reject(err);
+                }
+            });
         });
     }
 
     protected invokeTask(event: RpcEvents, ...args: any[]): Promise<any> {
-        if (this.status === "uninitiated" || this.status === "suspended") {
+        if (this.status === "closed") {
+            switch (event) {
+                case RpcEvents.AWAIT:
+                    return Promise.resolve(this.result);
+
+                case RpcEvents.YIELD:
+                    return Promise.resolve({ value: undefined, done: true });
+
+                case RpcEvents.RETURN:
+                    return Promise.resolve({ value: args[0], done: true });
+
+                case RpcEvents.THROW:
+                    return Promise.reject(obj2err(args[0]));
+            }
+        } else {
             if (this.status === "uninitiated" && event !== RpcEvents.AWAIT) {
                 // If in a generator call and the generator hasn't been 
                 // initiated, send the request with arguments for initiation on
@@ -755,33 +829,34 @@ class ThenableIteratorProxy implements ThenableAsyncGeneratorLike {
 
             this.status = "suspended";
 
-            return this.prepareTask().then(res => {
+            return this.prepareTask(event, args[0]).then(res => {
                 if (event === RpcEvents.AWAIT || res.done) {
                     // Mark the status to closed, so that any operations on the
                     // current generator after will return the local result 
                     // instead of requesting the remote service again.
                     this.status = "closed";
                     delete this.client["tasks"][this.taskId];
+
+                    // The result should only store the returning value of the
+                    // target function.
+                    if (event === RpcEvents.AWAIT) {
+                        this.result = res;
+                    } else {
+                        this.result = res.value;
+                    }
                 }
 
                 if (event !== RpcEvents.AWAIT && !("value" in res)) {
                     res.value = void 0;
                 }
 
-                return (this.result = res);
+                return res;
             }).catch(err => {
-                // Mark the status to errored, so that any operations on the
-                // current generator after will return the local result 
-                // instead of requesting the remote service again.
-                this.status = "errored";
-                this.result = err;
+                this.status = "closed";
+                delete this.client["tasks"][this.taskId];
 
                 throw err;
             });
-        } else if (this.status === "closed") {
-            return Promise.resolve(this.result);
-        } else { // this.status === "errored"
-            return Promise.reject(args[0]);
         }
     }
 }
