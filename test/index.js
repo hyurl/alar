@@ -12,6 +12,7 @@ const User = require("./app/service/user").default;
 const config = require("./app/config").default;
 const ChildProcess = require("child_process");
 const net = require("net");
+const MyError = require("./error").default;
 
 function fork(filename) {
     return new Promise((resolve, reject) => {
@@ -503,36 +504,32 @@ describe("Alar ModuleProxy", () => {
     });
 
     it("should get result from a local generator as expected", (done) => {
-        awaiter(null, null, null, function* () {
-            var result = [];
-            var generator = app.service.user.instance(app.local).getFriends("Open Source", "Good Fella");
+        var result = [];
+        var generator = app.service.user.instance(app.local).getFriends("Open Source", "Good Fella");
 
-            while (true) {
-                let res = generator.next();
+        while (true) {
+            let res = generator.next();
 
-                result.push(res.value);
+            result.push(res.value);
 
-                if (res.done) {
-                    break;
-                }
+            if (res.done) {
+                break;
             }
+        }
 
-            assert.deepStrictEqual(result, ["Mozilla", "GitHub", "Linux", ["Open Source", "Good Fella"]]);
-            done();
-        });
+        assert.deepStrictEqual(result, ["Mozilla", "GitHub", "Linux", ["Open Source", "Good Fella"]]);
+        done();
     });
 
     it("should invoke next method in the local generator as expected", (done) => {
-        awaiter(null, null, null, function* () {
-            var generator = app.service.user.instance(app.local).repeatAfterMe();
-            var result = generator.next("Google");
-            var result1 = generator.next("Google");
+        var generator = app.service.user.instance(app.local).repeatAfterMe();
+        var result = generator.next("Google");
+        var result1 = generator.next("Google");
 
-            assert.deepStrictEqual(result, { value: undefined, done: false });
-            assert.deepStrictEqual(result1, { value: "Google", done: false });
+        assert.deepStrictEqual(result, { value: undefined, done: false });
+        assert.deepStrictEqual(result1, { value: "Google", done: false });
 
-            done();
-        });
+        done();
     });
 
     it("should invoke return method in the local generator as expected", (done) => {
@@ -546,7 +543,7 @@ describe("Alar ModuleProxy", () => {
         });
     });
 
-    it("should invoke thorw method in the remote generator as expected", (done) => {
+    it("should invoke thorw method in the local generator as expected", (done) => {
         awaiter(null, null, null, function* () {
             var generator = app.service.user.instance(app.local).repeatAfterMe();
             var _err = new Error("test throw method");
@@ -564,6 +561,34 @@ describe("Alar ModuleProxy", () => {
             assert.deepStrictEqual(generator.next(), { value: undefined, done: true });
             assert.strictEqual(yield generator, undefined);
 
+            done();
+        });
+    });
+
+    it("should transmit a custom error as expected", (done) => {
+        awaiter(null, null, null, function* () {
+            var server = yield app.serve(config);
+            var client = yield app.connect(config);
+
+            server.register(app.service.user);
+            client.register(app.service.user);
+            alar.RpcChannel.registerError(MyError);
+
+            let err;
+
+            try {
+                yield app.service.user.instance().userError();
+            } catch (e) {
+                err = e;
+            }
+
+            assert.ok(err instanceof MyError);
+            assert.strictEqual(err.name, "MyError");
+            assert.strictEqual(err.message, "something went wrong");
+            assert.strictEqual(err.toString(), "MyError: something went wrong");
+
+            yield client.close();
+            yield server.close();
             done();
         });
     });

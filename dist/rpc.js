@@ -58,6 +58,9 @@ class RpcChannel {
     onError(handler) {
         this.errorHandler = handler;
     }
+    static registerError(ctor) {
+        util_1.Errors[ctor.name] = ctor;
+    }
 }
 exports.RpcChannel = RpcChannel;
 class RpcServer extends RpcChannel {

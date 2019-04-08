@@ -11,6 +11,7 @@ import {
     ThenableAsyncGeneratorLike
 } from "thenable-generator";
 import {
+    Errors,
     obj2err,
     err2obj,
     absPath,
@@ -99,6 +100,11 @@ export abstract class RpcChannel implements RpcOptions {
      */
     onError(handler: (err: Error) => void) {
         this.errorHandler = handler;
+    }
+
+    /** Registers a new type of error so that the channel can transmit it. */
+    static registerError(ctor: new (...args: any) => Error) {
+        Errors[ctor.name] = ctor;
     }
 
     /** Opens the channel. */

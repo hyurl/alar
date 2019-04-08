@@ -8,9 +8,19 @@ const omit = require("lodash/omit");
 const startsWith = require("lodash/startsWith");
 const thenable_generator_1 = require("thenable-generator");
 const WinPipe = "\\\\?\\pipe\\";
+const ErrorProps = ["name", "message", "stack"];
 exports.local = Symbol("local");
 exports.remotized = Symbol("remotized");
 exports.noLocal = Symbol("noLocal");
+exports.Errors = {
+    AssertionError: assert_1.AssertionError,
+    Error,
+    EvalError,
+    RangeError,
+    ReferenceError,
+    SyntaxError,
+    TypeError
+};
 function absPath(filename, withPipe) {
     if (!path.isAbsolute(filename)) {
         filename = path.resolve(process.cwd(), filename);
@@ -55,24 +65,13 @@ exports.getInstance = getInstance;
 function err2obj(err) {
     if (!(err instanceof Error))
         return err;
-    let props = ["name", "message", "stack"];
-    return Object.assign({}, pick(err, props), omit(err, props));
+    return Object.assign({}, pick(err, ErrorProps), omit(err, ErrorProps));
 }
 exports.err2obj = err2obj;
 function obj2err(obj) {
-    let Errors = {
-        AssertionError: assert_1.AssertionError,
-        Error,
-        EvalError,
-        RangeError,
-        ReferenceError,
-        SyntaxError,
-        TypeError,
-    };
-    let err = Object.create((Errors[obj.name] || Error).prototype);
-    let props = ["name", "message", "stack"];
+    let err = Object.create((exports.Errors[obj.name] || Error).prototype);
     for (let prop in obj) {
-        if (props.indexOf(prop) >= 0) {
+        if (ErrorProps.indexOf(prop) >= 0) {
             set(err, prop, obj[prop], true);
         }
         else {

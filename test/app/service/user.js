@@ -1,3 +1,5 @@
+const MyError = require("../../error").default;
+
 exports.default = class User {
     constructor(name) {
         this.name = name;
@@ -23,6 +25,10 @@ exports.default = class User {
         while (true) {
             value = yield value;
         }
+    }
+
+    userError() {
+        throw new MyError("something went wrong");
     }
 
     static getInstance() {

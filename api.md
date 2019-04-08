@@ -208,6 +208,8 @@ The following properties and methods work in both implementations:
 - `onError(handler: (err: Error) => void)` Binds an error handler invoked 
     whenever an error occurred in asynchronous operations which can't be caught
     during run-time.
+- `RpcChannel.registerError(ctor: new (...args: any) => Error)` Registers a new 
+    type of error so that the channel can transmit it.
 
 # RpcServer
 
