@@ -662,4 +662,23 @@ describe("Alar ModuleProxy", () => {
             done();
         });
     });
+
+    it("should access to the corresponding singleton when passing DSN", (done) => {
+        awaiter(null, null, null, function* () {
+            var server = yield app.serve(config);
+            var client = yield app.connect(config);
+
+            server.register(app.service.user);
+            client.register(app.service.user);
+
+            assert.strictEqual(
+                app.service.user.instance(server.dsn),
+                app.service.user.remoteSingletons[server.dsn]
+            );
+
+            yield client.close();
+            yield server.close();
+            done();
+        });
+    });
 });

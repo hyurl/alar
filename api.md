@@ -23,7 +23,8 @@ The interface has the following properties and methods:
 - `instance(route?: any): T` Gets the local singleton or a remote instance of 
     the module, if connected to one or more remote instances, the module proxy 
     will automatically calculate the `route` and direct the traffic to the 
-    corresponding remote instance.
+    corresponding remote instance. If the given route matches the DSN of any 
+    remote service, the corresponding singleton will be returned instead.
 - `noLocal(): this` If the module is registered as remote service, however when 
     no RPC channel is available, by default, `instance()` will fail to the local 
     instance, using this method to disable the default behavior.
@@ -199,7 +200,7 @@ its server and client implementations.
 
 The following properties and methods work in both implementations:
 
-- `dns: string` Gets the data source name according to the configuration.
+- `dsn: string` Gets the data source name according to the configuration.
 - `open(): Promise<this>` Opens the channel. This method is internally called by
     `ModuleProxy.serve()` and `ModuleProxy.connect()`, you don't have to call it.
 - `close(): Promise<this>` Closes the channel.

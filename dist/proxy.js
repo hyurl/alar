@@ -62,6 +62,9 @@ let ModuleProxyBase = ModuleProxyBase_1 = class ModuleProxyBase {
         }
     }
     instance(route = "") {
+        if (typeof route === "string" && this.remoteSingletons[route]) {
+            return this.remoteSingletons[route];
+        }
         let keys = Object.keys(this.remoteSingletons);
         if (route === util_1.local || !this[util_1.remotized] || (!keys.length && !this[util_1.noLocal])) {
             return this.singletons[this.name] || (this.singletons[this.name] = util_1.createLocalInstance(this));

@@ -68,6 +68,12 @@ export class ModuleProxyBase<T = any> implements ModuleProxy<T> {
     }
 
     instance(route: any = ""): T {
+        // If the route matches the any key of the remoteSingletons, return the
+        // corresponding singleton as wanted.
+        if (typeof route === "string" && this.remoteSingletons[route]) {
+            return this.remoteSingletons[route];
+        }
+
         let keys = Object.keys(this.remoteSingletons);
 
         if (route === local || !this[remotized] || (!keys.length && !this[noLocal])) {
@@ -76,7 +82,7 @@ export class ModuleProxyBase<T = any> implements ModuleProxy<T> {
             );
         } else if (keys.length) {
             // If the module is connected to one or more remote instances,
-            // redirect traffic to them automatically.
+            // redirect traffic to one of them automatically.
             let id = keys[hash(objectHash(route)) % keys.length];
             return this.remoteSingletons[id];
         } else {
