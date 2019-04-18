@@ -118,7 +118,9 @@ export function createRemoteInstance(
             let type = typeof ins[prop];
             let isFn = type === "function";
 
-            if (isFn && !ins[prop].proxified) {
+            if (isFn && !ins[prop].proxified
+                && !Reflect.ownKeys(ins).includes(prop)
+            ) {
                 set(ins, prop, mergeFnProperties(fnCreator(prop), ins[prop]));
             }
 
@@ -126,6 +128,23 @@ export function createRemoteInstance(
         },
         has: (ins, prop: string) => {
             return typeof ins[prop] === "function";
+        }
+    });
+}
+
+export function createLocalInstance(mod: ModuleProxy<any>) {
+    return new Proxy(getInstance(mod), {
+        get: (ins, prop: string) => {
+            if (typeof ins[prop] === "function"
+                && !ins[prop].proxified
+                && !Reflect.ownKeys(ins).includes(prop)
+            ) {
+                let origin: Function = ins[prop];
+
+                set(ins, prop, mergeFnProperties(generable(origin), origin), true);
+            }
+
+            return ins[prop];
         }
     });
 }
@@ -146,18 +165,4 @@ function generable(origin: Function) {
             throw err;
         }
     };
-}
-
-export function createLocalInstance(mod: ModuleProxy<any>) {
-    return new Proxy(getInstance(mod), {
-        get: (ins, prop: string) => {
-            if (typeof ins[prop] === "function" && !ins[prop].proxified) {
-                let origin: Function = ins[prop];
-
-                set(ins, prop, mergeFnProperties(generable(origin), origin));
-            }
-
-            return ins[prop];
-        }
-    });
 }

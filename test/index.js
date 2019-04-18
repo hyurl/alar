@@ -681,4 +681,25 @@ describe("Alar ModuleProxy", () => {
             done();
         });
     });
+
+    it("should now proxify any property functions in an instance", (done) => {
+        awaiter(null, null, null, function* () {
+            var server = yield app.serve(config);
+            var client = yield app.connect(config);
+            var newFn = () => {};
+
+            server.register(app.service.user);
+            client.register(app.service.user);
+
+            assert.strictEqual(app.service.user.instance(app.local).setName.proxified, true);
+            assert.strictEqual(app.service.user.instance(app.local).propFn.proxified, undefined);
+
+            app.service.user.instance(app.local).propFn = newFn;
+            assert.strictEqual(app.service.user.instance(app.local).propFn, newFn);
+
+            yield client.close();
+            yield server.close();
+            done();
+        });
+    });
 });

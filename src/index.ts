@@ -3,7 +3,7 @@ import { watch, FSWatcher } from "chokidar";
 import startsWith = require("lodash/startsWith");
 import { RpcOptions, RpcChannel, RpcServer, RpcClient, ClientOptions } from './rpc';
 import { ModuleProxyBase } from "./proxy";
-import { local } from './util';
+import * as util from './util';
 
 export {
     ModuleProxyBase,
@@ -12,7 +12,8 @@ export {
     RpcServer,
     RpcClient,
     ClientOptions,
-    FSWatcher
+    FSWatcher,
+    util
 };
 
 // Auto-Load And Remote.
@@ -83,7 +84,7 @@ export class ModuleProxy extends ModuleProxyBase {
      * If passed to the `ModuleProxy<T>.instance()`, the method will always 
      * return the local instance.
      */
-    local = local;
+    local = util.local;
 
     get exports() {
         return {};

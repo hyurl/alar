@@ -102,7 +102,8 @@ function createRemoteInstance(mod, fnCreator) {
         get: (ins, prop) => {
             let type = typeof ins[prop];
             let isFn = type === "function";
-            if (isFn && !ins[prop].proxified) {
+            if (isFn && !ins[prop].proxified
+                && !Reflect.ownKeys(ins).includes(prop)) {
                 set(ins, prop, mergeFnProperties(fnCreator(prop), ins[prop]));
             }
             return isFn ? ins[prop] : (type === "undefined" ? undefined : null);
@@ -113,6 +114,20 @@ function createRemoteInstance(mod, fnCreator) {
     });
 }
 exports.createRemoteInstance = createRemoteInstance;
+function createLocalInstance(mod) {
+    return new Proxy(getInstance(mod), {
+        get: (ins, prop) => {
+            if (typeof ins[prop] === "function"
+                && !ins[prop].proxified
+                && !Reflect.ownKeys(ins).includes(prop)) {
+                let origin = ins[prop];
+                set(ins, prop, mergeFnProperties(generable(origin), origin), true);
+            }
+            return ins[prop];
+        }
+    });
+}
+exports.createLocalInstance = createLocalInstance;
 function generable(origin) {
     return function (...args) {
         try {
@@ -132,16 +147,4 @@ function generable(origin) {
         }
     };
 }
-function createLocalInstance(mod) {
-    return new Proxy(getInstance(mod), {
-        get: (ins, prop) => {
-            if (typeof ins[prop] === "function" && !ins[prop].proxified) {
-                let origin = ins[prop];
-                set(ins, prop, mergeFnProperties(generable(origin), origin));
-            }
-            return ins[prop];
-        }
-    });
-}
-exports.createLocalInstance = createLocalInstance;
 //# sourceMappingURL=util.js.map

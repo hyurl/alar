@@ -4,6 +4,7 @@ const data = require("../../data").default;
 exports.default = class User {
     constructor(name) {
         this.name = name;
+        this.propFn = () => {};
     }
 
     setName(name) {
