@@ -119,7 +119,7 @@ export function createRemoteInstance(
             let isFn = type === "function";
 
             if (isFn && !ins[prop].proxified
-                && !Reflect.ownKeys(ins).includes(prop)
+                && !(<Object>ins).hasOwnProperty(prop)
             ) {
                 set(ins, prop, mergeFnProperties(fnCreator(prop), ins[prop]));
             }
@@ -137,7 +137,7 @@ export function createLocalInstance(mod: ModuleProxy<any>) {
         get: (ins, prop: string) => {
             if (typeof ins[prop] === "function"
                 && !ins[prop].proxified
-                && !Reflect.ownKeys(ins).includes(prop)
+                && !(<Object>ins).hasOwnProperty(prop)
             ) {
                 let origin: Function = ins[prop];
 

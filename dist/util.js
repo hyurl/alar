@@ -103,7 +103,7 @@ function createRemoteInstance(mod, fnCreator) {
             let type = typeof ins[prop];
             let isFn = type === "function";
             if (isFn && !ins[prop].proxified
-                && !Reflect.ownKeys(ins).includes(prop)) {
+                && !ins.hasOwnProperty(prop)) {
                 set(ins, prop, mergeFnProperties(fnCreator(prop), ins[prop]));
             }
             return isFn ? ins[prop] : (type === "undefined" ? undefined : null);
@@ -119,7 +119,7 @@ function createLocalInstance(mod) {
         get: (ins, prop) => {
             if (typeof ins[prop] === "function"
                 && !ins[prop].proxified
-                && !Reflect.ownKeys(ins).includes(prop)) {
+                && !ins.hasOwnProperty(prop)) {
                 let origin = ins[prop];
                 set(ins, prop, mergeFnProperties(generable(origin), origin), true);
             }
