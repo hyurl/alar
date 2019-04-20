@@ -1,11 +1,11 @@
 {
   "name": "alar",
-  "version": "3.4.2",
+  "version": "3.4.3",
   "description": "Auto-Load And Remote.",
   "main": "dist/index.js",
   "types": "src/index.ts",
   "scripts": {
-    "test": "mocha"
+    "test": "mocha --exit"
   },
   "repository": {
     "type": "git",
@@ -42,7 +42,7 @@
     "sequid": "^1.0.1",
     "sleep-promise": "^8.0.1",
     "string-hash": "^1.1.3",
-    "thenable-generator": "^0.3.6",
+    "thenable-generator": "^0.3.7",
     "tslib": "^1.9.3"
   },
   "devDependencies": {

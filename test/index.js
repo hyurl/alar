@@ -566,6 +566,17 @@ describe("Alar ModuleProxy", () => {
         });
     });
 
+    it("should return as-is from a local instance regular method as expected", (done) => {
+        var data = {};
+        var name = app.service.user.instance(app.local).getName();
+        var result = app.service.user.instance(app.local).setAndGet(data);
+
+        assert.strictEqual(name, "Mr. World");
+        assert.strictEqual(result, data);
+
+        done();
+    });
+
     it("should transmit a custom error as expected", (done) => {
         awaiter(null, null, null, function* () {
             var server = yield app.serve(config);
@@ -682,11 +693,11 @@ describe("Alar ModuleProxy", () => {
         });
     });
 
-    it("should now proxify any property functions in an instance", (done) => {
+    it("should not proxify any property functions in an instance", (done) => {
         awaiter(null, null, null, function* () {
             var server = yield app.serve(config);
             var client = yield app.connect(config);
-            var newFn = () => {};
+            var newFn = () => { };
 
             server.register(app.service.user);
             client.register(app.service.user);

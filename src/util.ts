@@ -4,7 +4,11 @@ import { AssertionError } from 'assert';
 import pick = require("lodash/pick");
 import omit = require("lodash/omit");
 import startsWith = require("lodash/startsWith");
-import { ThenableAsyncGenerator, ThenableGenerator } from 'thenable-generator';
+import {
+    ThenableAsyncGenerator,
+    ThenableGenerator,
+    util
+} from 'thenable-generator';
 
 type ErrorObject = Error & { [x: string]: any };
 const WinPipe = "\\\\?\\pipe\\";
@@ -154,9 +158,9 @@ function generable(origin: Function) {
         try {
             let res = origin.apply(this, args);
 
-            if (res && typeof res[Symbol.asyncIterator] === "function") {
+            if (res && util.isAsyncGenerator(res)) {
                 return new ThenableAsyncGenerator(res);
-            } else if (res && typeof res[Symbol.iterator] === "function") {
+            } else if (res && util.isGenerator(res)) {
                 return new ThenableGenerator(res);
             } else {
                 return res;

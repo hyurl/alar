@@ -132,10 +132,10 @@ function generable(origin) {
     return function (...args) {
         try {
             let res = origin.apply(this, args);
-            if (res && typeof res[Symbol.asyncIterator] === "function") {
+            if (res && thenable_generator_1.util.isAsyncGenerator(res)) {
                 return new thenable_generator_1.ThenableAsyncGenerator(res);
             }
-            else if (res && typeof res[Symbol.iterator] === "function") {
+            else if (res && thenable_generator_1.util.isGenerator(res)) {
                 return new thenable_generator_1.ThenableGenerator(res);
             }
             else {
