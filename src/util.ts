@@ -4,11 +4,8 @@ import { AssertionError } from 'assert';
 import pick = require("lodash/pick");
 import omit = require("lodash/omit");
 import startsWith = require("lodash/startsWith");
-import {
-    ThenableAsyncGenerator,
-    ThenableGenerator,
-    util
-} from 'thenable-generator';
+import { ThenableAsyncGenerator, ThenableGenerator } from 'thenable-generator';
+import * as util from "check-iterable";
 
 type ErrorObject = Error & { [x: string]: any };
 const WinPipe = "\\\\?\\pipe\\";

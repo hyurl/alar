@@ -7,6 +7,7 @@ const pick = require("lodash/pick");
 const omit = require("lodash/omit");
 const startsWith = require("lodash/startsWith");
 const thenable_generator_1 = require("thenable-generator");
+const util = require("check-iterable");
 const WinPipe = "\\\\?\\pipe\\";
 const ErrorProps = ["name", "message", "stack"];
 exports.local = Symbol("local");
@@ -132,10 +133,10 @@ function generable(origin) {
     return function (...args) {
         try {
             let res = origin.apply(this, args);
-            if (res && thenable_generator_1.util.isAsyncGenerator(res)) {
+            if (res && util.isAsyncGenerator(res)) {
                 return new thenable_generator_1.ThenableAsyncGenerator(res);
             }
-            else if (res && thenable_generator_1.util.isGenerator(res)) {
+            else if (res && util.isGenerator(res)) {
                 return new thenable_generator_1.ThenableGenerator(res);
             }
             else {
