@@ -17,7 +17,7 @@ Alar, on the other hand, based on namespace and ES6 proxy, it creates a
 weak-reference of the module, and only import the module when needed. And since 
 it's weak-referenced, it will not make any copy to the module, and when the 
 module file is changed, it can wipe out the memory cache and reload the module 
-without any side-effect.
+with very few side-effects.
 
 ### How to use?
 
