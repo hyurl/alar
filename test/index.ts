@@ -217,6 +217,9 @@ describe("Alar ModuleProxy", () => {
         // kill the server and restart it, the client will reconnect in the
         // background automatically.
         proc.kill();
+
+        await sleep(100);
+
         proc = await fork(filename);
 
         while (!client.connected) {
