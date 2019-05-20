@@ -6,7 +6,7 @@ import { BiMap } from "advanced-collections";
 import isSocketResetError = require("is-socket-reset-error");
 import sleep = require("sleep-promise");
 import sequid from "sequid";
-import isIteratorLike = require("is-iterator-like");
+import { isIteratorLike } from "check-iterable";
 import {
     source,
     ThenableAsyncGenerator,

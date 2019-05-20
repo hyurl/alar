@@ -6,7 +6,8 @@ import { createLocalInstance, local, remotized, noLocal } from './util';
 import { ModuleLoader } from './index';
 import { deprecate } from "util";
 
-const isTsNode = process.execArgv.join(" ").includes("ts-node");
+const cmd = process.execArgv.concat(process.argv).join(" ");
+const isTsNode = cmd.includes("ts-node");
 const defaultLoader: ModuleLoader = {
     extension: isTsNode ? ".ts" : ".js",
     load: require,

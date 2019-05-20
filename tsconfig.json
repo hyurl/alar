@@ -19,13 +19,11 @@
             "es2016.array.include"
         ]
     },
-    "includes": [
-        "src/*.ts",
-        "src/*/*.ts",
-        "src/*/*/*.ts"
+    "files": [
+        "./src/index.ts"
     ],
     "exclude": [
-        "examples/*",
+        "./test/*",
         "./node_modules/*"
     ]
 }

@@ -1,5 +1,5 @@
-class MyError extends Error {
-    constructor(message) {
+export default class MyError extends Error {
+    constructor(message: string) {
         super(message);
     }
 
@@ -7,5 +7,3 @@ class MyError extends Error {
         return this.constructor.name;
     }
 }
-
-exports.default = MyError;

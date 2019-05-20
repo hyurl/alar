@@ -24,7 +24,7 @@ declare global {
         getInstance?(): T;
     }
 
-    interface ModuleProxy<T, R1 = any, R2 = any, R3 = any, R4 = any, R5 = any> {
+    interface ModuleProxy<T, A1 = any, A2 = any, A3 = any, A4 = any, A5 = any> {
         /** The name (with namespace) of the module. */
         readonly name: string;
         /** The path (without extension) of the module. */
@@ -38,11 +38,11 @@ declare global {
 
         /** Creates a new instance of the module. */
         create(): T;
-        create(arg1: R1): T;
-        create(arg1: R1, arg2: R2): T;
-        create(arg1: R1, arg2: R2, arg3: R3): T;
-        create(arg1: R1, arg2: R2, arg3: R3, arg4: R4): T;
-        create(arg1: R1, arg2: R2, arg3: R3, arg4: R4, arg5: R5): T;
+        create(arg1: A1): T;
+        create(arg1: A1, arg2: A2): T;
+        create(arg1: A1, arg2: A2, arg3: A3): T;
+        create(arg1: A1, arg2: A2, arg3: A3, arg4: A4): T;
+        create(arg1: A1, arg2: A2, arg3: A3, arg4: A4, arg5: A5): T;
 
         /**
          * Gets the local singleton or a remote instance of the module, if 
