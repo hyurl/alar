@@ -372,7 +372,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
     connected = false;
     /** Whether the channel is closed. */
     closed = false;
-    protected socket: net.Socket;
+    protected socket: net.Socket = null;
     protected initiated = false;
     protected registry: { [name: string]: ModuleProxy<any> } = {};
     protected temp: any[] = [];
@@ -398,84 +398,18 @@ export class RpcClient extends RpcChannel implements ClientOptions {
     constructor(options: string | number | ClientOptions, host?: string) {
         super(<any>options, host);
         this.id = this.id || Math.random().toString(16).slice(2);
-        this.socket = new net.Socket();
-        this.socket.on("error", err => {
-            if (this.connected && !isSocketResetError(err) && this.errorHandler) {
-                this.errorHandler(err);
-            }
-        }).on("end", () => {
-            // Emit close event so that the client can try reconnect in the 
-            // background.
-            if (!this.connecting && this.socket.destroyed) {
-                this.socket.emit("close", false);
-            }
-        }).on("close", hadError => {
-            // If the socket is closed or reset, pause the service immediately 
-            // and try to reconnect if the channel is not closed.
-            this.connected = false;
-            this.pause();
-
-            if (!this.closed && !this.connecting && this.initiated) {
-                this.reconnect(hadError ? this.timeout : 0);
-            }
-        }).on("data", async (buf) => {
-            let msg = receive<Response>(buf, this.temp);
-
-            for (let [event, taskId, data] of msg) {
-                let task: Task;
-
-                switch (event) {
-                    case RpcEvents.CONNECT:
-                        this.finishConnect();
-                        break;
-
-                    case RpcEvents.BROADCAST:
-                        // If receives the broadcast event, call all the 
-                        // listeners bound to the corresponding event. 
-                        let listeners = this.events[taskId] || [];
-
-                        for (let handle of listeners) {
-                            await handle(data);
-                        }
-                        break;
-
-                    // When receiving response from the server, resolve 
-                    // immediately.
-                    case RpcEvents.INVOKE:
-                    case RpcEvents.YIELD:
-                    case RpcEvents.RETURN:
-                        if (task = this.tasks[taskId]) {
-                            task.resolve(data);
-                        }
-                        break;
-
-                    // If any error occurs on the server, it will be delivered
-                    // to the client.
-                    case RpcEvents.THROW:
-                        if (task = this.tasks[taskId]) {
-                            task.reject(obj2err(data));
-                        }
-                        break;
-
-                    case RpcEvents.PONG:
-                        // cancel self destruction.
-                        clearTimeout(this.selfDestruction);
-                        this.selfDestruction = null;
-                        break;
-                }
-            }
-        });
     }
 
     open(): Promise<this> {
         return new Promise((resolve, reject) => {
-            if (this.socket.connecting || this.connected || this.closed) {
+            if ((this.socket && this.socket.connecting)
+                || this.connected || this.closed) {
                 return resolve(this);
             }
 
             this.connecting = true;
 
-            let listener = () => {
+            let connectListener = () => {
                 this.initiated = true;
                 this.connecting = false;
                 this.socket.removeListener("error", errorListener);
@@ -491,7 +425,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
             };
             let errorListener = (err: Error) => {
                 this.connecting = false;
-                this.socket.removeListener("connect", listener);
+                this.socket.removeListener("connect", connectListener);
 
                 // An EALREADY error may happen if background re-connections
                 // got conflicted and one of the them finishes connect 
@@ -503,13 +437,20 @@ export class RpcClient extends RpcChannel implements ClientOptions {
                 }
             };
 
-            if (this.path) { // connect IPC (Unix domain socket or Windows named pipe)
-                this.socket.connect(absPath(this.path, true));
-            } else { // connect RPC
-                this.socket.connect(this.port, this.host);
+            if (this.path) {
+                // connect IPC (Unix domain socket or Windows named pipe)
+                this.socket = net.createConnection(this.path, connectListener);
+            } else {
+                // connect RPC
+                this.socket = net.createConnection(
+                    this.port,
+                    this.host,
+                    connectListener
+                );
             }
 
-            this.socket.once("connect", listener).once("error", errorListener);
+            this.socket.once("error", errorListener);
+            this.prepareChannel();
         });
     }
 
@@ -644,6 +585,78 @@ export class RpcClient extends RpcChannel implements ClientOptions {
                 ...args
             ));
         };
+    }
+
+    protected prepareChannel() {
+        this.socket.on("error", err => {
+            if (this.connected &&
+                !isSocketResetError(err) && this.errorHandler) {
+                this.errorHandler(err);
+            }
+        }).on("end", () => {
+            // Emit close event so that the client can try reconnect in the 
+            // background.
+            if (!this.connecting && this.socket.destroyed) {
+                this.socket.emit("close", false);
+            }
+        }).on("close", hadError => {
+            // If the socket is closed or reset, pause the service immediately 
+            // and try to reconnect if the channel is not closed.
+            this.connected = false;
+            this.pause();
+
+            if (!this.closed && !this.connecting && this.initiated) {
+                this.reconnect(hadError ? this.timeout : 0);
+            }
+        }).on("data", async (buf) => {
+            let msg = receive<Response>(buf, this.temp);
+
+            for (let [event, taskId, data] of msg) {
+                let task: Task;
+
+                switch (event) {
+                    case RpcEvents.CONNECT:
+                        this.finishConnect();
+                        break;
+
+                    case RpcEvents.BROADCAST:
+                        // If receives the broadcast event, call all the 
+                        // listeners bound to the corresponding event. 
+                        let listeners = this.events[taskId] || [];
+
+                        for (let handle of listeners) {
+                            await handle(data);
+                        }
+                        break;
+
+                    // When receiving response from the server, resolve 
+                    // immediately.
+                    case RpcEvents.INVOKE:
+                    case RpcEvents.YIELD:
+                    case RpcEvents.RETURN:
+                        if (task = this.tasks[taskId]) {
+                            task.resolve(data);
+                        }
+                        break;
+
+                    // If any error occurs on the server, it will be delivered
+                    // to the client.
+                    case RpcEvents.THROW:
+                        if (task = this.tasks[taskId]) {
+                            task.reject(obj2err(data));
+                        }
+                        break;
+
+                    case RpcEvents.PONG:
+                        // cancel self destruction.
+                        clearTimeout(this.selfDestruction);
+                        this.selfDestruction = null;
+                        break;
+                }
+            }
+        });
+
+        return this;
     }
 }
 
