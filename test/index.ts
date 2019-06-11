@@ -607,6 +607,33 @@ describe("Alar ModuleProxy", () => {
         await server.close();
     });
 
+    /////////////////////// Dependency Injection ///////////////////////////////
+
+    it("should add dependency as expected", async () => {
+        class Article {
+            @app.service.user.inject()
+            protected admin: User;
+    
+            getAdminName(): Promise<string> {
+                return this.admin.getName();
+            }
+        }
+
+        var server = await App.serve(config);
+        var client = await App.connect(config);
+        var article = new Article;
+
+        server.register(app.service.user);
+        client.register(app.service.user);
+
+        assert.strictEqual(await article.getAdminName(), "Mr. World");
+
+        await client.close();
+        await server.close();
+    });
+
+    /////////////////////// Dependency Injection ///////////////////////////////
+
     // Due to **chokaidar**'s bug of [Not working with fs.writeFile](https://github.com/paulmillr/chokidar/issues/790)
     // the watching and reloading feature cannot be tested here, you could just 
     // test it in your own project.

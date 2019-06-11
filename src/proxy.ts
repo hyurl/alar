@@ -5,6 +5,7 @@ import { applyMagic } from "js-magic";
 import { createLocalInstance, local, remotized, noLocal } from './util';
 import { ModuleLoader } from './index';
 import { deprecate } from "util";
+import { Injectable } from "./di";
 
 const cmd = process.execArgv.concat(process.argv).join(" ");
 const isTsNode = cmd.includes("ts-node");
@@ -17,7 +18,7 @@ const defaultLoader: ModuleLoader = {
 }
 
 @applyMagic
-export class ModuleProxyBase<T = any> implements ModuleProxy<T> {
+export class ModuleProxyBase<T = any> extends Injectable implements ModuleProxy<T> {
     readonly path: string;
     protected loader: ModuleLoader = defaultLoader;
     protected singletons: { [name: string]: T } = {};
@@ -25,6 +26,7 @@ export class ModuleProxyBase<T = any> implements ModuleProxy<T> {
     protected children: { [name: string]: ModuleProxy<any> } = {};
 
     constructor(readonly name: string, path: string) {
+        super();
         this.path = normalize(path);
     }
 
@@ -91,13 +93,13 @@ export class ModuleProxyBase<T = any> implements ModuleProxy<T> {
         }
     }
 
+    remote(route: any = ""): T {
+        return this.instance(route);
+    }
+
     noLocal(): this {
         this[noLocal] = true;
         return this;
-    }
-
-    remote(route: any = ""): T {
-        return this.instance(route);
     }
 
     protected __get(prop: string) {

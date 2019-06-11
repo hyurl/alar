@@ -25,6 +25,8 @@ The interface has the following properties and methods:
     will automatically calculate the `route` and direct the traffic to the 
     corresponding remote instance. If the given route matches the DSN of any 
     remote service, the corresponding singleton will be returned instead.
+- `inject(route?: any): PropertyDecorator` Allowing the current module to be 
+    injected as a dependency bound to a property of another class instance.
 - `noLocal(): this` If the module is registered as remote service, however when 
     no RPC channel is available, by default, `instance()` will fail to the local 
     instance, using this method to disable the default behavior.

@@ -63,6 +63,12 @@ declare global {
          * instance, using this method to disable the default behavior.
          */
         noLocal(): this;
+
+        /**
+         * Allowing the current module to be injected as a dependency bound to a
+         * property of another class instance.
+         */
+        inject(route?: any): PropertyDecorator;
     }
 }
 

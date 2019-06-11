@@ -274,4 +274,44 @@ export default class User {
 })();
 ```
 
+## Dependency Injection
+
+Since 3.5.0, Alar add a new method `inject(route?: any)` to allow you setting up
+dependency for a specific class in a handy way, check this example:
+
+```typescript
+class Article {
+    @app.service.user.inject()
+    protected user: User;
+
+    getAuthorName(): Promise<string> {
+        return this.user.getName();
+    }
+}
+
+(async () => {
+    var article = new Article;
+    console.log(await article.getAuthorName());
+})();
+```
+
+Be noticed that this method differs from the usage of assigning the instance to
+an variable, if you use the syntax below to add the instance to a class property,
+it will break the hot-reloading feature that Alar provided.
+
+```typescript
+class Article {
+    protected user = app.services.user.instance(); // DON't do this
+}
+```
+
+This syntax will make a strong reference to the user module, which will not
+allow the program to refer to the new instance after reloading the user module.
+But, when using the `inject()` method, which ships with `instance()` under the
+hood, the hot-reloading model will still work fine.
+
+However, Alar doesn't provide a way to inject new instances dynamically, since
+every new instance will create a strong reference itself, that makes that kind
+of injection less useful.
+
 For more details, please check the [API documentation](./api.md).
