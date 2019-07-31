@@ -71,10 +71,10 @@ describe("Alar ModuleProxy", () => {
     });
 
     it("should get singleton instance via instance() method as expected", () => {
-        app.service.user.instance().name = "Mr. Handsome";
+        app.service.user.instance(alar.util.local).name = "Mr. Handsome";
         assert.ok(app.service.user.instance() instanceof User);
         assert.strictEqual(app.service.user.instance().name, "Mr. Handsome");
-        app.service.user.instance().name = "Mr. World";
+        app.service.user.instance(alar.util.local).name = "Mr. World";
         assert.strictEqual(app.service.user.instance().name, "Mr. World");
     });
 

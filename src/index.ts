@@ -19,6 +19,18 @@ export {
 // Auto-Load And Remote.
 
 declare global {
+    type FunctionPropertyNames<T> = {
+        [K in keyof T]: T[K] extends Function ? K : never
+    }[keyof T];
+    type NonFunctionPropertyNames<T> = {
+        [K in keyof T]: T[K] extends Function ? never : K
+    }[keyof T];
+    type FunctionProperties<T> = Pick<T, FunctionPropertyNames<T>>;
+    type NonFunctionProperties<T> = Pick<T, NonFunctionPropertyNames<T>>;
+    type Voidable<T> = {
+        [K in keyof T]: T[K] | void
+    }
+
     interface ModuleConstructor<T> {
         new(...args: any[]): T;
         getInstance?(): T;
@@ -50,12 +62,9 @@ declare global {
          * automatically calculate the `route` and direct the traffic to the 
          * corresponding remote instance.
          */
-        instance(route?: any): T;
-
-        /**
-         * @deprecated use `instance()` instead.
-         */
-        remote(route?: any): T;
+        instance(local: symbol): T;
+        instance(route?: any): FunctionProperties<T> &
+            Voidable<Readonly<NonFunctionProperties<T>>>;
 
         /**
          * If the module is registered as remote service, however when no RPC 
