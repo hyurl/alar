@@ -191,10 +191,6 @@ import { App } from "./app";
 })();
 ```
 
-*History version of Alar provides a `remote()` method to access remote ability,*
-*however since 3.0, with a little API change, `remote()` has been merged to*
-*`instance()` and is deprecated.*
-
 ### Hot-reloading in Remote Service
 
 The local watcher may notice the local file has changed and try to reload the 

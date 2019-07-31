@@ -39,10 +39,6 @@ The interface has the following properties and methods:
 **`protected` or `private` in any service class that may potentially served**
 **remotely.**
 
-*History version of Alar provides a `remote()` method to access remote ability,*
-*however since 3.0, with a little API change, `remote()` has been merged to*
-*`instance()` and is deprecated.*
-
 # ModuleConstructor
 
 This interface will be globalized as well, it indicates the very class 
