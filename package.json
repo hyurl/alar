@@ -6,7 +6,7 @@
   "types": "src/index.ts",
   "scripts": {
     "prepublish": "tsc",
-    "pretest": "mkdir -p ./test/.bin/test/json/ && cp ./test/json/test.json ./test/.bin/test/json/test.json && tsc -p test",
+    "pretest": "mkdir -p ./test/.bin/test/ && cp -R ./test/json ./test/.bin/test && tsc -p test",
     "test": "mocha --exit test/.bin/test",
     "posttest": "rm -rf ./test/.bin"
   },

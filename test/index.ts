@@ -16,7 +16,7 @@ var App: alar.ModuleProxy;
 
 function fork(filename: string): Promise<childProcess.ChildProcess> {
     return new Promise((resolve, reject) => {
-        var proc = childProcess.fork(filename);
+        let proc = childProcess.fork(filename);
 
         proc.on("error", reject).on("message", msg => {
             if (msg === "ready") {
@@ -51,8 +51,8 @@ describe("Alar ModuleProxy", () => {
     });
 
     it("should create instances via create() method as expected", async () => {
-        var user1 = app.service.user.create("Mr. Handsome");
-        var user2 = app.service.user.create("Mr. World");
+        let user1 = app.service.user.create("Mr. Handsome");
+        let user2 = app.service.user.create("Mr. World");
 
         assert.ok(user1 instanceof User);
         assert.ok(user2 instanceof User);
@@ -63,7 +63,7 @@ describe("Alar ModuleProxy", () => {
     });
 
     it("should create instance via ctor property as expected", () => {
-        var bootstrap = new app.bootstrap.ctor();
+        let bootstrap = new app.bootstrap.ctor();
 
         bootstrap.init();
         assert.ok(bootstrap instanceof Bootstrap);
@@ -95,9 +95,9 @@ describe("Alar ModuleProxy", () => {
     });
 
     it("should use a custom loader to load JSON module as expected", () => {
-        var Json = new alar.ModuleProxy("json", __dirname + "/json");
-        var cache = {};
-        var json: any = Json;
+        let Json = new alar.ModuleProxy("json", __dirname + "/json");
+        let cache = {};
+        let json: any = Json;
 
         Json.setLoader({
             extension: ".json",
@@ -114,13 +114,48 @@ describe("Alar ModuleProxy", () => {
         assert.deepStrictEqual(json.test.instance(), { name: "JSON", version: "1.0.0" });
     });
 
+    it("should use a custom loader with multiple extensions as expected", () => {
+        let Json = new alar.ModuleProxy("json", __dirname + "/json");
+        let json: any = Json;
+        let expected = {
+            foo: "Hello",
+            bar: "World"
+        };
+
+        Json.setLoader({
+            cache: {},
+            extension: [".js", ".json"],
+            load(filename) {
+                let ext = path.extname(filename);
+
+                if (ext === ".js") {
+                    return require(filename);
+                } else if (this.cache[filename]) {
+                    return this.cache[filename];
+                } else { // .json
+                    let content = fs.readFileSync(filename, "utf8");
+                    let result = JSON.parse(content);
+                    return (this.cache[filename] = result);
+                }
+            },
+            unload(filename) {
+                delete this.cache[filename];
+            }
+        });
+
+        assert.deepStrictEqual(json.test1.instance(), expected);
+        assert.deepStrictEqual(json.test2.instance(), expected);
+        assert.strictEqual(Json.resolve(__dirname + "/json/test1.js"), "json.test1");
+        assert.strictEqual(Json.resolve(__dirname + "/json/test2.json"), "json.test2")
+    });
+
     it("should serve an IPC service as expected", async () => {
-        var sockPath = process.cwd() + "/alar.sock";
-        var server = await App.serve(sockPath);
+        let sockPath = process.cwd() + "/alar.sock";
+        let server = await App.serve(sockPath);
 
         server.register(app.service.user);
 
-        var client = await App.connect(sockPath);
+        let client = await App.connect(sockPath);
 
         client.register(app.service.user);
 
@@ -131,11 +166,11 @@ describe("Alar ModuleProxy", () => {
     });
 
     it("should serve an RPC service as expected", async () => {
-        var server = await App.serve(config);
+        let server = await App.serve(config);
 
         server.register(app.service.user);
 
-        var client = await App.connect(config);
+        let client = await App.connect(config);
 
         client.register(app.service.user);
 
@@ -146,12 +181,12 @@ describe("Alar ModuleProxy", () => {
     });
 
     it("should serve an RPC service with secret as expected", async () => {
-        var _config = Object.assign({ secret: "abcdefg" }, config);
-        var server = await App.serve(_config);
+        let _config = Object.assign({ secret: "abcdefg" }, config);
+        let server = await App.serve(_config);
 
         server.register(app.service.user);
 
-        var client = await App.connect(_config);
+        let client = await App.connect(_config);
 
         client.register(app.service.user);
 
@@ -162,8 +197,8 @@ describe("Alar ModuleProxy", () => {
     });
 
     it("should get clients cponnected to the service in IDs as expected", async () => {
-        var server = await App.serve(config);
-        var client = await App.connect(config);
+        let server = await App.serve(config);
+        let client = await App.connect(config);
 
         assert.deepStrictEqual(server.getClients(), [client.id]);
 
@@ -172,8 +207,8 @@ describe("Alar ModuleProxy", () => {
     });
 
     it("should pause and resume remote service as expected as expected", async () => {
-        var server = await App.serve(config);
-        var client = await App.connect(config);
+        let server = await App.serve(config);
+        let client = await App.connect(config);
 
         server.register(app.service.user);
         client.register(app.service.user);
@@ -193,8 +228,8 @@ describe("Alar ModuleProxy", () => {
     });
 
     it("should refuse connect if secret is incorrect as expected", async () => {
-        var _config = Object.assign({ secret: "abcdefg" }, config);
-        var server = await App.serve(_config);
+        let _config = Object.assign({ secret: "abcdefg" }, config);
+        let server = await App.serve(_config);
         let socket = net.createConnection(config.port, config.host);
         socket.write("12345");
 
@@ -208,9 +243,9 @@ describe("Alar ModuleProxy", () => {
     });
 
     it("should reconnect the RPC service in the background automatically", async () => {
-        var filename = __dirname + "/server/index.js";
-        var proc = await fork(filename);
-        var client = await App.connect(config);
+        let filename = __dirname + "/server/index.js";
+        let proc = await fork(filename);
+        let client = await App.connect(config);
 
         client.register(app.service.user);
 
@@ -244,9 +279,9 @@ describe("Alar ModuleProxy", () => {
     });
 
     it("should subscribe and publish an event as expected", async () => {
-        var server = await App.serve(config);
-        var client = await App.connect(config);
-        var data;
+        let server = await App.serve(config);
+        let client = await App.connect(config);
+        let data;
 
         client.subscribe("set-data", msg => {
             data = msg;
@@ -265,11 +300,11 @@ describe("Alar ModuleProxy", () => {
     });
 
     it("should subscribe and publish multiple events as expected", async () => {
-        var server = await App.serve(config);
-        var client = await App.connect(config);
-        var data;
-        var data1;
-        var data2;
+        let server = await App.serve(config);
+        let client = await App.connect(config);
+        let data;
+        let data1;
+        let data2;
 
         client.subscribe("set-data", msg => {
             data = msg;
@@ -295,10 +330,10 @@ describe("Alar ModuleProxy", () => {
     });
 
     it("should unsubscribe event handles as expected", async () => {
-        var server = await App.serve(config);
-        var client = await App.connect(config);
-        var listner = () => null;
-        var listner2 = () => null;
+        let server = await App.serve(config);
+        let client = await App.connect(config);
+        let listner = () => null;
+        let listner2 = () => null;
 
         client.subscribe("set-data", listner)
             .subscribe("set-data", listner2)
@@ -317,9 +352,9 @@ describe("Alar ModuleProxy", () => {
     });
 
     it("should publish an event to specified clients as expected", async () => {
-        var server = await App.serve(config);
-        var client = await App.connect(Object.assign({}, config, { id: "abc" }));
-        var data;
+        let server = await App.serve(config);
+        let client = await App.connect(Object.assign({}, config, { id: "abc" }));
+        let data;
 
         assert.strictEqual(client.id, "abc");
 
@@ -340,14 +375,14 @@ describe("Alar ModuleProxy", () => {
     });
 
     it("should get result from a remote generator as expected", async () => {
-        var server = await App.serve(config);
-        var client = await App.connect(config);
-        var result: (string | string[])[] = [];
+        let server = await App.serve(config);
+        let client = await App.connect(config);
+        let result: (string | string[])[] = [];
 
         server.register(app.service.user);
         client.register(app.service.user);
 
-        var generator = app.service.user.instance().getFriends("Open Source", "Good Fella");
+        let generator = app.service.user.instance().getFriends("Open Source", "Good Fella");
         while (true) {
             let res = await generator.next();
 
@@ -365,15 +400,15 @@ describe("Alar ModuleProxy", () => {
     });
 
     it("should invoke next method in the remote generator as expected", async () => {
-        var server = await App.serve(config);
-        var client = await App.connect(config);
+        let server = await App.serve(config);
+        let client = await App.connect(config);
 
         server.register(app.service.user);
         client.register(app.service.user);
 
-        var generator = app.service.user.instance().repeatAfterMe();
-        var result = await generator.next("Google");
-        var result1 = await generator.next("Google");
+        let generator = app.service.user.instance().repeatAfterMe();
+        let result = await generator.next("Google");
+        let result1 = await generator.next("Google");
 
         assert.deepStrictEqual(result, { value: undefined, done: false });
         assert.deepStrictEqual(result1, { value: "Google", done: false });
@@ -383,14 +418,14 @@ describe("Alar ModuleProxy", () => {
     });
 
     it("should invoke return method in the remote generator as expected", async () => {
-        var server = await App.serve(config);
-        var client = await App.connect(config);
+        let server = await App.serve(config);
+        let client = await App.connect(config);
 
         server.register(app.service.user);
         client.register(app.service.user);
 
-        var generator = app.service.user.instance().repeatAfterMe();
-        var result = await generator.return("Google");
+        let generator = app.service.user.instance().repeatAfterMe();
+        let result = await generator.return("Google");
 
         assert.deepStrictEqual(result, { value: "Google", done: true });
         assert.strictEqual(await generator, "Google");
@@ -400,15 +435,15 @@ describe("Alar ModuleProxy", () => {
     });
 
     it("should invoke throw method in the remote generator as expected", async () => {
-        var server = await App.serve(config);
-        var client = await App.connect(config);
+        let server = await App.serve(config);
+        let client = await App.connect(config);
 
         server.register(app.service.user);
         client.register(app.service.user);
 
-        var generator = app.service.user.instance().repeatAfterMe();
-        var _err = new Error("test throw method");
-        var err: Error;
+        let generator = app.service.user.instance().repeatAfterMe();
+        let _err = new Error("test throw method");
+        let err: Error;
 
         try {
             await generator.throw(_err);
@@ -427,8 +462,8 @@ describe("Alar ModuleProxy", () => {
     });
 
     it("should get result from a local generator as expected", async () => {
-        var result: (string | string[])[] = [];
-        var generator = app.service.user.instance(App.local).getFriends("Open Source", "Good Fella");
+        let result: (string | string[])[] = [];
+        let generator = app.service.user.instance(App.local).getFriends("Open Source", "Good Fella");
 
         while (true) {
             let res = await generator.next();
@@ -444,26 +479,26 @@ describe("Alar ModuleProxy", () => {
     });
 
     it("should invoke next method in the local generator as expected", async () => {
-        var generator = app.service.user.instance(App.local).repeatAfterMe();
-        var result = await generator.next("Google");
-        var result1 = await generator.next("Google");
+        let generator = app.service.user.instance(App.local).repeatAfterMe();
+        let result = await generator.next("Google");
+        let result1 = await generator.next("Google");
 
         assert.deepStrictEqual(result, { value: undefined, done: false });
         assert.deepStrictEqual(result1, { value: "Google", done: false });
     });
 
     it("should invoke return method in the local generator as expected", async () => {
-        var generator = app.service.user.instance(App.local).repeatAfterMe();
-        var result = await generator.return("Google");
+        let generator = app.service.user.instance(App.local).repeatAfterMe();
+        let result = await generator.return("Google");
 
         assert.deepStrictEqual(result, { value: "Google", done: true });
         assert.strictEqual(await generator, "Google");
     });
 
     it("should invoke throw method in the local generator as expected", async () => {
-        var generator = app.service.user.instance(App.local).repeatAfterMe();
-        var _err = new Error("test throw method");
-        var err: Error;
+        let generator = app.service.user.instance(App.local).repeatAfterMe();
+        let _err = new Error("test throw method");
+        let err: Error;
 
         try {
             await generator.throw(_err);
@@ -479,17 +514,17 @@ describe("Alar ModuleProxy", () => {
     });
 
     it("should return as-is from a local instance regular method as expected", async () => {
-        var data = {};
-        var name = await app.service.user.instance(App.local).getName();
-        var result = await app.service.user.instance(App.local).setAndGet(data);
+        let data = {};
+        let name = await app.service.user.instance(App.local).getName();
+        let result = await app.service.user.instance(App.local).setAndGet(data);
 
         assert.strictEqual(name, "Mr. World");
         assert.strictEqual(result, data);
     });
 
     it("should transmit a custom error as expected", async () => {
-        var server = await App.serve(config);
-        var client = await App.connect(config);
+        let server = await App.serve(config);
+        let client = await App.connect(config);
 
         server.register(app.service.user);
         client.register(app.service.user);
@@ -513,8 +548,8 @@ describe("Alar ModuleProxy", () => {
     });
 
     it("should transmit a non-standard error as expected", async () => {
-        var server = await App.serve(config);
-        var client = await App.connect(config);
+        let server = await App.serve(config);
+        let client = await App.connect(config);
 
         server.register(app.service.user);
         client.register(app.service.user);
@@ -535,8 +570,8 @@ describe("Alar ModuleProxy", () => {
     });
 
     it("should invoke the remote method in the background as expected", async () => {
-        var server = await App.serve(config);
-        var client = await App.connect(config);
+        let server = await App.serve(config);
+        let client = await App.connect(config);
 
         server.register(app.service.user);
         client.register(app.service.user);
@@ -557,8 +592,8 @@ describe("Alar ModuleProxy", () => {
     });
 
     it("should invoke the remote method await it after a while as expected", async () => {
-        var server = await App.serve(config);
-        var client = await App.connect(config);
+        let server = await App.serve(config);
+        let client = await App.connect(config);
 
         server.register(app.service.user);
         client.register(app.service.user);
@@ -574,8 +609,8 @@ describe("Alar ModuleProxy", () => {
     });
 
     it("should access to the corresponding singleton when passing DSN", async () => {
-        var server = await App.serve(config);
-        var client = await App.connect(config);
+        let server = await App.serve(config);
+        let client = await App.connect(config);
 
         server.register(app.service.user);
         client.register(app.service.user);
@@ -590,9 +625,9 @@ describe("Alar ModuleProxy", () => {
     });
 
     it("should not proxify any property functions in an instance", async () => {
-        var server = await App.serve(config);
-        var client = await App.connect(config);
-        var newFn = () => { };
+        let server = await App.serve(config);
+        let client = await App.connect(config);
+        let newFn = () => { };
 
         server.register(app.service.user);
         client.register(app.service.user);
@@ -613,15 +648,15 @@ describe("Alar ModuleProxy", () => {
         class Article {
             @app.service.user.inject()
             protected admin: User;
-    
+
             getAdminName(): Promise<string> {
                 return this.admin.getName();
             }
         }
 
-        var server = await App.serve(config);
-        var client = await App.connect(config);
-        var article = new Article;
+        let server = await App.serve(config);
+        let client = await App.connect(config);
+        let article = new Article;
 
         server.register(app.service.user);
         client.register(app.service.user);
@@ -638,10 +673,10 @@ describe("Alar ModuleProxy", () => {
     // the watching and reloading feature cannot be tested here, you could just 
     // test it in your own project.
     // it("should watch file change and reload module as expected", async () => {
-    //     var watcher = App.watch();
-    //     var user = app.service.user.create("Mr. Handsome");
-    //     var contents = await fs.readFile(app.service.user.path + ".js", "utf8");
-    //     var newContents = contents.replace("return this.name", "return this.name + ' World'");
+    //     let watcher = App.watch();
+    //     let user = app.service.user.create("Mr. Handsome");
+    //     let contents = await fs.readFile(app.service.user.path + ".js", "utf8");
+    //     let newContents = contents.replace("return this.name", "return this.name + ' World'");
 
     //     app.service.user.instance().name = "Mr. Handsome";
     //     assert.strictEqual(user.getName(), "Mr. Handsome");

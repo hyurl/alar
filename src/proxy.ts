@@ -1,11 +1,12 @@
 import hash = require("string-hash");
 import objectHash = require("object-hash");
-import { sep, normalize } from "path";
+import { sep, normalize, dirname, basename, extname } from "path";
 import { applyMagic } from "js-magic";
 import { createLocalInstance, local, remotized, noLocal } from './util';
 import { ModuleLoader } from './index';
 import { deprecate } from "util";
 import { Injectable } from "./di";
+import { readdirSync } from 'fs';
 
 const cmd = process.execArgv.concat(process.argv).join(" ");
 const isTsNode = cmd.includes("ts-node");
@@ -31,7 +32,24 @@ export class ModuleProxyBase<T = any> extends Injectable implements ModuleProxy<
     }
 
     get exports(): any {
-        return this.loader.load(this.path + this.loader.extension);
+        if (typeof this.loader.extension === "string") {
+            return this.loader.load(this.path + this.loader.extension);
+        } else {
+            let dir = dirname(this.path);
+            let name = basename(this.path);
+            let files = readdirSync(dir);
+
+            for (let file of files) {
+                let ext = extname(file);
+                let _name = basename(file, ext);
+
+                if (_name === name && this.loader.extension.includes(ext)) {
+                    return this.loader.load(this.path + ext);
+                }
+            }
+
+            throw new Error(`Cannot find module '${this.path}'`);
+        }
     }
 
     get proto(): T {
