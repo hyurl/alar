@@ -4,6 +4,10 @@ Alar is a light-weight framework that provides applications the ability to
 auto-load and hot-reload modules, as well as the ability to serve instances
 remotely as RPC services.
 
+## Prerequisites
+
+- Node.js `v8.3.0+`
+
 ## Auto-loading and Hot-reloading
 
 In NodeJS (with CommonJS module solution), `require` and `import` will 

@@ -232,7 +232,7 @@ connection.
 ### About Reconnection
 
 When the client detected the server is down or malfunction, it will destroy the
-connection positively and retry connect. Since v3.7.0, this feature uses an
+connection positively and retry connect. Since v4.0.0, this feature uses an
 exponential back-off mechanism to retry connect rapidly util about 2 minutes
 timeout before consider the server is down permanently, and will close the
 channel after that.
