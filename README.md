@@ -1,15 +1,15 @@
 # Alar
 
 Alar is a light-weight framework that provides applications the ability to 
-auto-load and hot-reload modules, and the ability to serve and connect remote 
-instances.
+auto-load and hot-reload modules, as well as the ability to serve instances
+remotely as RPC services.
 
 ## Auto-loading and Hot-reloading
 
 In NodeJS (with CommonJS module solution), `require` and `import` will 
-immediately load the corresponding module and make a reference *copy* in the 
+immediately load the corresponding module and make a reference *"copy"* in the 
 current scope. Which means, if the module doesn't finish initiation, e.g. 
-circular import, the application may not work  as expected, and if the module 
+circular import, the application may not work as expected, and if the module 
 file is modified, the application won't be able to reload that module without 
 restart the program.
 
@@ -22,9 +22,10 @@ with very few side-effects.
 ### How to use?
 
 In order to use Alar, one must create a root `ModuleProxy` instance, and assign
-it to the global namespace, so other files can directly use it without import 
-and share the benefits of declaration merging (in TypeScript, if not using is, 
-just ignore any tip and code of declaration merging).
+it to the global namespace, so other files can directly use it as a root
+namespace without import and share the benefits of declaration merging (in
+TypeScript vernacular, if not using is, just ignore any tips and code of
+declaration merging that may be discussed).
 
 ### Example
 
@@ -45,7 +46,7 @@ App.watch();
 ```
 
 In other files, just define and export a default class, and merge the type to 
-the namespace `app`, so that another file can access it directly via namespace.
+the namespace `app`, so that another file can access it directly as namespace.
 
 (NOTE: Alar offers first priority of the `default` export, if a module doesn't 
 have default export, Alar will try to load the entire exports object instead.)

@@ -1,28 +1,14 @@
 import * as os from "os";
 import * as path from "path";
-import { AssertionError } from 'assert';
-import pick = require("lodash/pick");
-import omit = require("lodash/omit");
 import startsWith = require("lodash/startsWith");
 import { ThenableAsyncGenerator, ThenableGenerator } from 'thenable-generator';
 import * as util from "check-iterable";
 
-type ErrorObject = Error & { [x: string]: any };
 const WinPipe = "\\\\?\\pipe\\";
-const ErrorProps = ["name", "message", "stack"];
 
 export const local = Symbol("local");
 export const remotized = Symbol("remotized");
 export const noLocal = Symbol("noLocal");
-export const Errors: { [name: string]: new (...args: any[]) => Error } = {
-    AssertionError,
-    Error,
-    EvalError,
-    RangeError,
-    ReferenceError,
-    SyntaxError,
-    TypeError
-};
 
 export function absPath(filename: string, withPipe?: boolean): string {
     // resolve path to be absolute
@@ -66,33 +52,6 @@ export function getInstance<T>(mod: ModuleProxy<T>, instantiate = true): T {
     }
 
     return ins;
-}
-
-export function err2obj(err: any): ErrorObject {
-    if (!(err instanceof Error)) return err;
-
-    return <any>Object.assign({}, pick(err, ErrorProps), omit(err, ErrorProps));
-}
-
-export function obj2err(obj: any): ErrorObject {
-    if (typeof obj !== "object" ||
-        !("name" in obj) ||
-        !("message" in obj) ||
-        !("stack" in obj)) {
-        return obj;
-    }
-
-    let err = Object.create((Errors[obj.name] || Error).prototype);
-
-    for (let prop in obj) {
-        if (ErrorProps.indexOf(prop) >= 0) {
-            set(err, prop, obj[prop], true);
-        } else {
-            err[prop] = obj[prop];
-        }
-    }
-
-    return err;
 }
 
 export function mergeFnProperties(fn: Function, origin: Function) {

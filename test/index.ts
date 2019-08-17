@@ -196,7 +196,7 @@ describe("Alar ModuleProxy", () => {
         await server.close();
     });
 
-    it("should get clients cponnected to the service in IDs as expected", async () => {
+    it("should get clients connected to the service in IDs as expected", async () => {
         let server = await App.serve(config);
         let client = await App.connect(config);
 
@@ -669,29 +669,20 @@ describe("Alar ModuleProxy", () => {
 
     /////////////////////// Dependency Injection ///////////////////////////////
 
-    // Due to **chokaidar**'s bug of [Not working with fs.writeFile](https://github.com/paulmillr/chokidar/issues/790)
-    // the watching and reloading feature cannot be tested here, you could just 
-    // test it in your own project.
-    // it("should watch file change and reload module as expected", async () => {
-    //     let watcher = App.watch();
-    //     let user = app.service.user.create("Mr. Handsome");
-    //     let contents = await fs.readFile(app.service.user.path + ".js", "utf8");
-    //     let newContents = contents.replace("return this.name", "return this.name + ' World'");
+    it("should watch file change and reload module as expected", async function () {
+        this.timeout(15000)
+        let watcher = App.watch();
+        let contents = await fs.readFile(app.service.user.path + ".js", "utf8");
+        let newContents = contents.replace("return this.name", "return this.name + ' Budy'");
 
-    //     app.service.user.instance().name = "Mr. Handsome";
-    //     assert.strictEqual(user.getName(), "Mr. Handsome");
-    //     assert.strictEqual(app.service.user.instance().getName(), "Mr. Handsome");
+        assert.strictEqual(await app.service.user.instance(App.local).getName(), "Mr. World");
 
-    //     await fs.writeFile(app.service.user.path + ".js", newContents, "utf8");
-    //     await sleep(500); // wait a while for watcher to refresh the module.
+        await sleep(500); // wait a while for watcher to be ready
+        fs.writeFileSync(app.service.user.path + ".js", newContents, "utf8");
+        await new Promise(resolve => watcher.once("change", resolve));
 
-    //     user = app.service.user.create("Mr. Handsome");
-    //     app.service.user.instance().name = "Mr. Handsome";
-    //     assert.strictEqual(user.getName(), "Mr. Handsome World");
-    //     assert.strictEqual(app.service.user.instance().getName(), "Mr. Handsome World");
+        assert.strictEqual(await app.service.user.instance(App.local).getName(), "Mr. World Budy");
 
-    //     await fs.writeFile(app.service.user.path + ".js", contents, "utf8");
-
-    //     watcher.close();
-    // });
+        watcher.close();
+    });
 });

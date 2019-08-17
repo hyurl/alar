@@ -1,7 +1,9 @@
 import { extname, sep } from "path";
 import { watch, FSWatcher } from "chokidar";
 import startsWith = require("lodash/startsWith");
-import { RpcOptions, RpcChannel, RpcServer, RpcClient, ClientOptions } from './rpc';
+import { RpcOptions, RpcChannel } from './rpc/channel';
+import { RpcClient, ClientOptions } from "./rpc/client";
+import { RpcServer } from "./rpc/server";
 import { ModuleProxyBase } from "./proxy";
 import * as util from './util';
 

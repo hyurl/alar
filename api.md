@@ -1,4 +1,6 @@
-# ModuleProxy
+# API Reference
+
+## ModuleProxy
 
 ```typescript
 interface ModuleProxy<T, R1 = any, R2 = any, R3 = any, R4 = any, R5 = any>
@@ -39,7 +41,7 @@ The interface has the following properties and methods:
 **`protected` or `private` in any service class that may potentially served**
 **remotely.**
 
-# ModuleConstructor
+## ModuleConstructor
 
 This interface will be globalized as well, it indicates the very class 
 constructor of the module (default export).
@@ -55,7 +57,7 @@ interface ModuleConstructor<T> {
     `ModuleProxy<T>.instance()`, it will get the returning instance as the 
     singleton instead.
 
-# ModuleProxyBase
+## ModuleProxyBase
 
 ```typescript
 class ModuleProxyBase<T = any> implements ModuleProxy<T> { }
@@ -110,7 +112,7 @@ This class has the following extra properties and methods:
 **NOTE: although `ModuleProxy` inherits from `ModuleProxyBase`, calling the**
 **methods like `create()`, `instance()` should be avoided.**
 
-# ModuleLoader
+## ModuleLoader
 
 ```typescript
 export interface ModuleLoader {
@@ -148,7 +150,7 @@ json.setLoader({
 });
 ```
 
-# RpcOptions
+## RpcOptions
 
 ```typescript
 interface RpcOptions {
@@ -157,8 +159,6 @@ interface RpcOptions {
     port?: number;
     path?: string;
     secret?: string;
-    timeout?: number;
-    pingTimeout?: number;
 }
 ```
 
@@ -167,26 +167,10 @@ If `path` is provided (equivalent to `ModuleProxy.serve(config: string)` and
 channel. Otherwise, the RPC channel will be bound a network channel according to
 the `host` and `port`.
 
-By default `timeout` is set `5000`ms. On the client, it works both in connection
-and IPC requests. The client provides internal support of re-connection, if a
-remote service is disconnected e.g. the server shutdown (even manually), the 
-traffic will be redirected to other online services, and the client will try to
-reconnect repeatedly in the background (according to `timeout`).
+If a `secret` key is set, the client must provide the same key when connect,
+otherwise the server will reject.
 
-On the server, the `timeout` is used to set the interval timer of garbage 
-collection. Every time the garbage collector runs, it will check if there are
-any long-time inactive connections, if a connection is inactive longer than 
-`pingTimeout`, then it'll be recycled, and any suspended tasks bound to the
-connection will be canceled as well.
-
-The client also uses `pingTimeout` to set the interval timer of ping 
-function, once a PING signal is sent, the server will return a PONG signal and
-refresh the last active time of the connection (any operation will do that too).
-However if the server failed to response a PONG after `timeout`, the client will
-think the server is down or something is wrong with the connection, and it will
-destroy the current connection immediately in order to create a new one.
-
-# RpcChannel
+## RpcChannel
 
 ```typescript
 abstract class RpcChannel implements RpcOptions { }
@@ -210,7 +194,7 @@ The following properties and methods work in both implementations:
 - `RpcChannel.registerError(ctor: new (...args: any) => Error)` Registers a new 
     type of error so that the channel can transmit it.
 
-# RpcServer
+## RpcServer
 
 ```typescript
 class RpcServer extends RpcChannel { }
@@ -224,18 +208,36 @@ The server implementation of the RPC channel.
 - `getClients(): string[]` Returns all IDs of clients that connected to the 
     server.
 
-# ClientOptions
+## ClientOptions
 
 ```typescript
 interface ClientOptions extends RpcOptions {
     id?: string;
+    timeout?: number;
+    pingInterval?: number;
 }
 ```
 
 The `id` is used for the server publishing events to specified clients, if not 
 provided, a random string will be generated.
 
-# RpcClient
+By default `timeout` is set `5000`ms, it is used to force a timeout error when
+a RPC request fires and doesn't get response after a long time.
+
+The client uses `pingInterval` to set a timer of ping function, so that to
+ensure the connection is alive. If the server doesn't response when pinging, the
+client will consider the server is down and will destroy and retry the
+connection.
+
+### About Reconnection
+
+When the client detected the server is down or malfunction, it will destroy the
+connection positively and retry connect. Since v3.7.0, this feature uses an
+exponential back-off mechanism to retry connect rapidly util about 2 minutes
+timeout before consider the server is down permanently, and will close the
+channel after that.
+
+## RpcClient
 
 ```typescript
 class RpcClient extends RpcChannel implements ClientOptions { }
