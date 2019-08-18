@@ -1,7 +1,7 @@
 {
     "compilerOptions": {
         "module": "commonjs",
-        "target": "es2015",
+        "target": "es2017",
         "preserveConstEnums": true,
         "rootDirs": [
             ".",
@@ -16,11 +16,7 @@
         "pretty": true,
         "removeComments": true,
         "sourceMap": true,
-        "noImplicitThis": true,
-        "lib": [
-            "es2015",
-            "es2016.array.include"
-        ]
+        "noImplicitThis": true
     },
     "includes": [
         "*.ts",
