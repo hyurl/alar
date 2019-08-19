@@ -158,7 +158,8 @@ export class ModuleProxy extends ModuleProxyBase {
 
         return watch(path, {
             awaitWriteFinish: true,
-            followSymlinks: false
+            followSymlinks: false,
+            ignored: /\.(js\.map|d\.ts|md)$/
         }).on("change", (filename) => {
             clearCache("change", filename, listener);
         }).on("unlink", (filename) => {
