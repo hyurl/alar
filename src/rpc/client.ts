@@ -34,17 +34,23 @@ export class RpcClient extends RpcChannel implements ClientOptions {
     protected tasks: { [taskId: number]: Task; } = {};
     protected events: { [name: string]: Subscriber[] } = {};
     protected finishConnect: Function = null;
+    private lastActiveTime: number = Date.now();
     protected selfDestruction: NodeJS.Timer = null;
     protected pingTimer = setInterval(() => {
-        this.selfDestruction = setTimeout(() => {
-            // If the server doesn't response after timeout, that indicates 
-            // something is wrong with the connection, destroy it so it can be
-            // reconnected.
-            this.socket.destroy();
-        }, this.timeout);
+        // The strategy is, we only need to send a PING signal to the server,
+        // and don't have to concern about whether the server would or would not
+        // response a PONG signal, we only need to detect if any data is 
+        // received from the server, and refresh the lastActiveTime to prevent
+        // sending too much unnecessary PING/PONG frame.
+        if (Date.now() - this.lastActiveTime >= this.pingInterval) {
+            this.selfDestruction = setTimeout(
+                this.socket.destroy.bind(this.socket),
+                this.timeout
+            );
 
-        this.send(RpcEvents.PING, this.id);
-    }, this.pingInterval);
+            this.send(RpcEvents.PING, this.id);
+        }
+    }, 5000);
     private reconConter = exponential({
         maxDelay: 9600
     }).on("ready", async (num) => {
@@ -267,6 +273,13 @@ export class RpcClient extends RpcChannel implements ClientOptions {
                 this.reconConter.backoff();
             }
         }).on("data", async (buf) => {
+            this.lastActiveTime = Date.now();
+
+            if (this.selfDestruction) {
+                clearTimeout(this.selfDestruction);
+                this.selfDestruction = null;
+            }
+
             let msg = receive<Response>(buf, this.temp);
 
             for (let [event, taskId, data] of msg) {
@@ -305,11 +318,11 @@ export class RpcClient extends RpcChannel implements ClientOptions {
                         }
                         break;
 
-                    case RpcEvents.PONG:
-                        // cancel self destruction.
-                        clearTimeout(this.selfDestruction);
-                        this.selfDestruction = null;
-                        break;
+                    // case RpcEvents.PONG:
+                    //     // cancel self destruction.
+                    //     clearTimeout(this.selfDestruction);
+                    //     this.selfDestruction = null;
+                    //     break;
                 }
             }
         });
