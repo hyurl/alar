@@ -7,6 +7,8 @@ import { ModuleLoader } from './index';
 import { deprecate } from "util";
 import { Injectable } from "./di";
 import { readdirSync } from 'fs';
+import cloneDeep = require("lodash/cloneDeep");
+import merge = require("lodash/merge");
 
 const cmd = process.execArgv.concat(process.argv).join(" ");
 const isTsNode = cmd.includes("ts-node");
@@ -82,7 +84,8 @@ export class ModuleProxyBase<T = any> extends Injectable implements ModuleProxy<
         if (this.ctor) {
             return new this.ctor(...args);
         } else if (this.proto) {
-            return Object.create(<any>this.proto);
+            // return Object.create(<any>this.proto);
+            return merge(cloneDeep(this.proto), args[0]);
         } else {
             throw new TypeError(`${this.name} is not a valid module.`);
         }

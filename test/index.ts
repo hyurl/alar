@@ -86,7 +86,10 @@ describe("Alar ModuleProxy", () => {
 
     it("should create instance from a prototype module as expected", () => {
         let ins = app.config.create();
-        assert.strictEqual(Object.getPrototypeOf(ins), config);
+        assert.deepStrictEqual(ins, config);
+
+        let ins2 = app.config.create({ host: "localhost" });
+        assert.deepStrictEqual(ins2, { ...config, host: "localhost" });
     });
 
     it("should use the prototype module as singleton as expected", () => {

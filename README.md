@@ -109,8 +109,9 @@ console.log(user.getName()); // Mr. Handsome
 
 Any module that exports an object as default will be considered as a prototype 
 module, when calling `create()` of that module, the object will be used as a 
-prototype, however when calling `instance()` of that module, the object itself 
-will be used as the singleton.
+prototype (since v4.0.4, a deep clone will be used instead, if an argument is
+passed, it will be merged to the new object). However when calling `instance()`
+of that module, the original object itself will be used as the singleton.
 
 ```typescript
 // src/config.ts
