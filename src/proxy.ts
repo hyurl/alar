@@ -87,7 +87,7 @@ export class ModuleProxyBase<T = any> extends Injectable implements ModuleProxy<
             // return Object.create(<any>this.proto);
             return merge(cloneDeep(this.proto), args[0]);
         } else {
-            throw new TypeError(`${this.name} is not a valid module.`);
+            throw new TypeError(`${this.name} is not a valid module`);
         }
     }
 
@@ -110,7 +110,7 @@ export class ModuleProxyBase<T = any> extends Injectable implements ModuleProxy<
             let id = keys[hash(objectHash(route)) % keys.length];
             return this.remoteSingletons[id];
         } else {
-            throw new ReferenceError("RPC service is not available.");
+            throw new ReferenceError(`Service ${this.name} is not available`);
         }
     }
 

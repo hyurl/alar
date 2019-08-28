@@ -96,9 +96,11 @@ export class RpcClient extends RpcChannel implements ClientOptions {
     open(): Promise<this> {
         return new Promise((resolve, reject) => {
             if (this.socket && this.socket.connecting) {
-                throw new Error("Channel is already open");
+                throw new Error(`Channel to ${this.dsn} is already open`);
             } else if (this.closed) {
-                throw new Error("Cannot reconnect after close the channel")
+                throw new Error(
+                    `Cannot reconnect to ${this.dsn} after closing the channel`
+                );
             }
 
             this.state === "connecting";
@@ -345,7 +347,7 @@ class ThenableIteratorProxy implements ThenableAsyncGeneratorLike {
 
     constructor(
         protected client: RpcClient,
-        protected name: string,
+        protected modname: string,
         protected method: string,
         ...args: any[]
     ) {
@@ -420,8 +422,11 @@ class ThenableIteratorProxy implements ThenableAsyncGeneratorLike {
             let unit = num === 1 ? "second" : "seconds";
 
             if (this.queue.length > 0) {
-                this.queue.shift().reject(new Error(
-                    `RPC request timeout after ${num} ${unit}`
+                let task = this.queue.shift();
+                let callee = `${this.modname}->${this.method}()`;
+
+                task.reject(new Error(
+                    `Request to ${callee} timeout after ${num} ${unit}`
                 ));
             }
 
@@ -497,7 +502,7 @@ class ThenableIteratorProxy implements ThenableAsyncGeneratorLike {
                 this.client.send(
                     event,
                     this.taskId,
-                    this.name,
+                    this.modname,
                     this.method,
                     [...this.args],
                     ...args
@@ -506,7 +511,7 @@ class ThenableIteratorProxy implements ThenableAsyncGeneratorLike {
                 this.client.send(
                     event,
                     this.taskId,
-                    this.name,
+                    this.modname,
                     this.method,
                     ...args
                 );

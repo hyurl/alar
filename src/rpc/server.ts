@@ -146,7 +146,7 @@ export class RpcServer extends RpcChannel {
 
             let msg = receive<Request>(buf, temp);
 
-            for (let [event, taskId, name, method, ...args] of msg) {
+            for (let [event, taskId, modname, method, ...args] of msg) {
                 switch (event) {
                     case RpcEvents.HANDSHAKE:
                         this.clients.set(<string>taskId, socket);
@@ -168,7 +168,7 @@ export class RpcServer extends RpcChannel {
                             try {
                                 // Connect to the singleton instance and 
                                 // invokes it's method to handle the request.
-                                let ins = this.registry[name].instance(local);
+                                let ins = this.registry[modname].instance(local);
                                 let task = ins[method].apply(ins, args);
 
                                 if (task && isIteratorLike(task[source])) {
@@ -198,8 +198,10 @@ export class RpcServer extends RpcChannel {
 
                             try {
                                 if (!task) {
+                                    let callee = `${modname}->${method}()`;
+
                                     throw new ReferenceError(
-                                        `task (${taskId}) doesn't exist`
+                                        `Task (${taskId}) of ${callee} doesn't exist`
                                     );
                                 } else {
                                     input = args[0];
