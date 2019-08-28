@@ -24,8 +24,8 @@ export interface ClientOptions extends RpcOptions {
 export class RpcClient extends RpcChannel implements ClientOptions {
     /** The unique ID of the client, useful for the server publishing events. */
     readonly id: string;
-    readonly timeout: number = 5000;
-    readonly pingInterval: number = 5000;
+    readonly timeout: number;
+    readonly pingInterval: number;
     protected state: ChannelState = "initiated";
     protected socket: net.Socket = null;
     protected registry: { [name: string]: ModuleProxy<any> } = {};
@@ -78,6 +78,8 @@ export class RpcClient extends RpcChannel implements ClientOptions {
     constructor(options: string | number | ClientOptions, host?: string) {
         super(<any>options, host);
         this.id = this.id || Math.random().toString(16).slice(2);
+        this.timeout = this.timeout || 5000;
+        this.pingInterval = this.pingInterval || 5000;
     }
 
     /** Whether the channel is in connecting state. */
