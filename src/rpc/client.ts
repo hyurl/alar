@@ -116,9 +116,13 @@ export class RpcClient extends RpcChannel implements ClientOptions {
                 };
 
                 // Sending the connection secret before hitting handshaking.
-                this.socket.write((this.secret || "") + "\r\n", () => {
+                if (this.secret) {
+                    this.socket.write(this.secret + "\r\n", () => {
+                        this.send(RpcEvents.HANDSHAKE, this.id);
+                    });
+                } else {
                     this.send(RpcEvents.HANDSHAKE, this.id);
-                });
+                }
             };
             let errorListener = (err: Error) => {
                 this.socket.removeListener("connect", connectListener);
@@ -241,7 +245,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
                 data.pop();
             }
 
-            this.socket.write(send(...data));
+            this.socket.write(send(data));
         }
     }
 

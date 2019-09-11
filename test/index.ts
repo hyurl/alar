@@ -410,8 +410,8 @@ describe("Alar ModuleProxy", () => {
         client.register(app.service.user);
 
         let generator = app.service.user.instance().repeatAfterMe();
-        let result = await generator.next("Google");
-        let result1 = await generator.next("Google");
+        let result = await generator.next(<any>"Google");
+        let result1 = await generator.next(<any>"Google");
 
         assert.deepStrictEqual(result, { value: undefined, done: false });
         assert.deepStrictEqual(result1, { value: "Google", done: false });
@@ -483,8 +483,8 @@ describe("Alar ModuleProxy", () => {
 
     it("should invoke next method in the local generator as expected", async () => {
         let generator = app.service.user.instance(App.local).repeatAfterMe();
-        let result = await generator.next("Google");
-        let result1 = await generator.next("Google");
+        let result = await generator.next(<any>"Google");
+        let result1 = await generator.next(<any>"Google");
 
         assert.deepStrictEqual(result, { value: undefined, done: false });
         assert.deepStrictEqual(result1, { value: "Google", done: false });

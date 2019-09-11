@@ -101,12 +101,12 @@ export class RpcServer extends RpcChannel {
 
     protected dispatch(socket: net.Socket, ...data: any[]) {
         if (!socket.destroyed && socket.writable) {
-            socket.write(send(...data));
+            socket.write(send(data));
         }
     }
 
     protected handleConnection(socket: net.Socket) {
-        let temp: Buffer[] = [];
+        let temp = [];
 
         socket.on("error", err => {
             // When any error occurs, if it's a socket reset error, e.g.
