@@ -11,6 +11,7 @@ import * as childProcess from "child_process";
 import * as net from "net";
 import MyError from "./error";
 import data from "./data";
+import * as bsp from "bsp";
 
 var App: alar.ModuleProxy;
 
@@ -234,7 +235,20 @@ describe("Alar ModuleProxy", () => {
         let _config = Object.assign({ secret: "abcdefg" }, config);
         let server = await App.serve(_config);
         let socket = net.createConnection(config.port, config.host);
-        socket.write("12345");
+        socket.write(bsp.encode("12345"));
+
+        while (!socket.destroyed) {
+            await sleep(10);
+        }
+
+        assert.ok(socket.destroyed);
+
+        await server.close();
+    });
+
+    it("should destroy connection if not handshake as expected", async () => {
+        let server = await App.serve(config);
+        let socket = net.createConnection(config.port, config.host);
 
         while (!socket.destroyed) {
             await sleep(10);

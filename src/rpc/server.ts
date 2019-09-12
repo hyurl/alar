@@ -106,6 +106,10 @@ export class RpcServer extends RpcChannel {
     }
 
     protected handleConnection(socket: net.Socket) {
+        let autoDestroy = setTimeout(() => {
+            socket.destroy(new Error("Handshake required"));
+        }, 1000);
+
         wrap(socket).on("error", err => {
             // When any error occurs, if it's a socket reset error, e.g.
             // client disconnected unexpected, the server could just 
@@ -114,8 +118,6 @@ export class RpcServer extends RpcChannel {
             if (!isSocketResetError(err) && this.errorHandler) {
                 this.errorHandler(err);
             }
-        }).on("end", () => {
-            socket.emit("close", false);
         }).on("close", () => {
             this.clients.deleteValue(socket);
 
@@ -132,7 +134,7 @@ export class RpcServer extends RpcChannel {
                     socket[authorized] = true;
                     return;
                 } else {
-                    return socket.destroy();
+                    return socket.destroy(new Error("Connection unauthorized"));
                 }
             }
 
@@ -141,6 +143,7 @@ export class RpcServer extends RpcChannel {
 
                 switch (event) {
                     case RpcEvents.HANDSHAKE:
+                        clearTimeout(autoDestroy);
                         this.clients.set(<string>taskId, socket);
                         this.suspendedTasks.set(socket, {});
                         // Send CONNECT event to notify the client that the 
