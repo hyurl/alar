@@ -1,7 +1,7 @@
 import * as net from "net";
 import sequid from "sequid";
 import { obj2err, err2obj } from 'err2obj';
-import { send, receive } from 'bsp';
+import { wrap } from 'bsp';
 import { exponential } from "backoff";
 import isSocketResetError = require('is-socket-reset-error');
 import { ThenableAsyncGenerator, ThenableAsyncGeneratorLike } from 'thenable-generator';
@@ -29,7 +29,6 @@ export class RpcClient extends RpcChannel implements ClientOptions {
     protected state: ChannelState = "initiated";
     protected socket: net.Socket = null;
     protected registry: { [name: string]: ModuleProxy<any> } = {};
-    protected temp: any[] = [];
     protected taskId = sequid(0, true);
     protected tasks: { [taskId: number]: Task; } = {};
     protected events: { [name: string]: Subscriber[] } = {};
@@ -117,7 +116,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
 
                 // Sending the connection secret before hitting handshaking.
                 if (this.secret) {
-                    this.socket.write(this.secret + "\r\n", () => {
+                    this.socket.write(this.secret, () => {
                         this.send(RpcEvents.HANDSHAKE, this.id);
                     });
                 } else {
@@ -141,6 +140,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
                 );
             }
 
+            this.socket = wrap(this.socket);
             this.socket.once("error", errorListener);
         });
     }
@@ -245,7 +245,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
                 data.pop();
             }
 
-            this.socket.write(send(data));
+            this.socket.write(data);
         }
     }
 
@@ -280,7 +280,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
                 this.pause();
                 this.reconConter.backoff();
             }
-        }).on("data", async (buf) => {
+        }).on("data", async (msg: Response) => {
             this.lastActiveTime = Date.now();
 
             if (this.selfDestruction) {
@@ -288,50 +288,41 @@ export class RpcClient extends RpcChannel implements ClientOptions {
                 this.selfDestruction = null;
             }
 
-            let msg = receive<Response>(buf, this.temp);
+            let [event, taskId, data] = msg;
+            let task: Task;
 
-            for (let [event, taskId, data] of msg) {
-                let task: Task;
+            switch (event) {
+                case RpcEvents.CONNECT:
+                    this.finishConnect();
+                    break;
 
-                switch (event) {
-                    case RpcEvents.CONNECT:
-                        this.finishConnect();
-                        break;
+                case RpcEvents.BROADCAST:
+                    // If receives the broadcast event, call all the 
+                    // listeners bound to the corresponding event. 
+                    let listeners = this.events[taskId] || [];
 
-                    case RpcEvents.BROADCAST:
-                        // If receives the broadcast event, call all the 
-                        // listeners bound to the corresponding event. 
-                        let listeners = this.events[taskId] || [];
+                    for (let handle of listeners) {
+                        await handle(data);
+                    }
+                    break;
 
-                        for (let handle of listeners) {
-                            await handle(data);
-                        }
-                        break;
+                // When receiving response from the server, resolve 
+                // immediately.
+                case RpcEvents.INVOKE:
+                case RpcEvents.YIELD:
+                case RpcEvents.RETURN:
+                    if (task = this.tasks[taskId]) {
+                        task.resolve(data);
+                    }
+                    break;
 
-                    // When receiving response from the server, resolve 
-                    // immediately.
-                    case RpcEvents.INVOKE:
-                    case RpcEvents.YIELD:
-                    case RpcEvents.RETURN:
-                        if (task = this.tasks[taskId]) {
-                            task.resolve(data);
-                        }
-                        break;
-
-                    // If any error occurs on the server, it will be delivered
-                    // to the client.
-                    case RpcEvents.THROW:
-                        if (task = this.tasks[taskId]) {
-                            task.reject(obj2err(data));
-                        }
-                        break;
-
-                    // case RpcEvents.PONG:
-                    //     // cancel self destruction.
-                    //     clearTimeout(this.selfDestruction);
-                    //     this.selfDestruction = null;
-                    //     break;
-                }
+                // If any error occurs on the server, it will be delivered
+                // to the client.
+                case RpcEvents.THROW:
+                    if (task = this.tasks[taskId]) {
+                        task.reject(obj2err(data));
+                    }
+                    break;
             }
         });
 

@@ -2,7 +2,7 @@ import * as net from "net";
 import * as path from "path";
 import * as fs from "fs-extra";
 import { err2obj } from "err2obj";
-import { send, receive } from "bsp";
+import { wrap } from "bsp";
 import { BiMap } from "advanced-collections";
 import { isIteratorLike } from "check-iterable";
 import { source, ThenableAsyncGenerator } from "thenable-generator";
@@ -101,14 +101,12 @@ export class RpcServer extends RpcChannel {
 
     protected dispatch(socket: net.Socket, ...data: any[]) {
         if (!socket.destroyed && socket.writable) {
-            socket.write(send(data));
+            socket.write(data);
         }
     }
 
     protected handleConnection(socket: net.Socket) {
-        let temp = [];
-
-        socket.on("error", err => {
+        wrap(socket).on("error", err => {
             // When any error occurs, if it's a socket reset error, e.g.
             // client disconnected unexpected, the server could just 
             // ignore the error. For other errors, the server should 
@@ -128,25 +126,19 @@ export class RpcServer extends RpcChannel {
             for (let id in tasks) {
                 tasks[id].return();
             }
-        }).on("data", async (buf) => {
-            if (!socket[authorized]) {
-                if (this.secret) {
-                    let index = buf.indexOf("\r\n");
-                    let secret = buf.slice(0, index).toString();
-
-                    if (secret !== this.secret) {
-                        return socket.destroy();
-                    } else {
-                        buf = buf.slice(index + 2);
-                    }
+        }).on("data", async (msg: string | Request) => {
+            if (this.secret && !socket[authorized]) {
+                if (this.secret === msg) {
+                    socket[authorized] = true;
+                    return;
+                } else {
+                    return socket.destroy();
                 }
-
-                socket[authorized] = true;
             }
 
-            let msg = receive<Request>(buf, temp);
+            if (Array.isArray(msg)) {
+                let [event, taskId, modname, method, ...args] = msg;
 
-            for (let [event, taskId, modname, method, ...args] of msg) {
                 switch (event) {
                     case RpcEvents.HANDSHAKE:
                         this.clients.set(<string>taskId, socket);

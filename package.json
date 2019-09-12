@@ -38,7 +38,6 @@
     "@types/fs-extra": "^5.1.0",
     "advanced-collections": "^0.1.2",
     "backoff": "^2.5.0",
-    "bsp": "^0.3.1",
     "check-iterable": "^1.0.2",
     "chokidar": "^3.0.2",
     "err2obj": "^1.0.1",
