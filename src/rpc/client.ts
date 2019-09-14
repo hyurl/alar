@@ -16,16 +16,16 @@ type Task = {
 };
 
 export interface ClientOptions extends RpcOptions {
-    id?: string;
     timeout?: number;
     pingInterval?: number;
 }
 
 export class RpcClient extends RpcChannel implements ClientOptions {
-    /** The unique ID of the client, useful for the server publishing events. */
+    /** The unique ID of the client, used for the server publishing events. */
     readonly id: string;
     readonly timeout: number;
     readonly pingInterval: number;
+    protected serverId: string;
     protected state: ChannelState = "initiated";
     protected socket: net.Socket = null;
     protected registry: { [name: string]: ModuleProxy<any> } = {};
@@ -65,7 +65,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
             // If tried 18 times (about 2 minutes) and still have no connection,
             // then consider the server is down permanently and close the client. 
             await this.close();
-            console.error(`Connection to ${this.dsn} is lost permanently.`);
+            console.error(`Connection to ${this.serverId} is lost permanently.`);
         } else {
             this.reconConter.backoff();
         }
@@ -79,6 +79,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
         this.id = this.id || Math.random().toString(16).slice(2);
         this.timeout = this.timeout || 5000;
         this.pingInterval = this.pingInterval || 5000;
+        this.serverId = this.dsn;
     }
 
     /** Whether the channel is in connecting state. */
@@ -97,10 +98,10 @@ export class RpcClient extends RpcChannel implements ClientOptions {
     open(): Promise<this> {
         return new Promise((resolve, reject) => {
             if (this.socket && this.socket.connecting) {
-                throw new Error(`Channel to ${this.dsn} is already open`);
+                throw new Error(`Channel to ${this.serverId} is already open`);
             } else if (this.closed) {
                 throw new Error(
-                    `Cannot reconnect to ${this.dsn} after closing the channel`
+                    `Cannot reconnect to ${this.serverId} after closing the channel`
                 );
             }
 
@@ -167,7 +168,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
         this.registry[mod.name] = mod;
 
         mod[remotized] = true;
-        mod["remoteSingletons"][this.dsn] = createRemoteInstance(
+        mod["remoteSingletons"][this.serverId] = createRemoteInstance(
             mod,
             (prop) => {
                 return this.createFunction(mod.name, prop);
@@ -179,7 +180,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
 
     /** Pauses the channel and redirect traffic to other channels. */
     pause(): boolean {
-        let { dsn } = this;
+        let { serverId } = this;
         let success = false;
 
         for (let name in this.registry) {
@@ -189,7 +190,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
             // instance, the traffic will be redirected to other alive services,
             // if all the services are dead, RPC calling should just fail with 
             // errors.
-            delete instances[dsn];
+            delete instances[serverId];
             success = true;
         }
 
@@ -198,13 +199,13 @@ export class RpcClient extends RpcChannel implements ClientOptions {
 
     /** Resumes the channel and continue handling traffic. */
     resume(): boolean {
-        let { dsn } = this;
+        let { serverId } = this;
         let success = false;
 
         for (let name in this.registry) {
             let instances = this.registry[name]["remoteSingletons"];
 
-            if (!instances[dsn]) {
+            if (!instances[serverId]) {
                 this.register(this.registry[name]);
                 success = true;
             }
@@ -293,6 +294,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
 
             switch (event) {
                 case RpcEvents.CONNECT:
+                    this.serverId = data;
                     this.finishConnect();
                     break;
 

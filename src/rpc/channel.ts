@@ -7,6 +7,7 @@ export interface RpcOptions {
     port?: number;
     path?: string;
     secret?: string;
+    id?: string;
 }
 
 export type Request = [number, number | string, string?, string?, ...any[]];

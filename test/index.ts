@@ -641,6 +641,23 @@ describe("Alar ModuleProxy", () => {
         await server.close();
     });
 
+    it("should set a custom serverId and access to the corresponding singleton", async () => {
+        let _config = { ...config, id: "test-server" };
+        let server = await App.serve(_config);
+        let client = await App.connect(config);
+
+        server.register(app.service.user);
+        client.register(app.service.user);
+
+        assert.strictEqual(
+            app.service.user.instance("test-server"),
+            app.service.user["remoteSingletons"]["test-server"]
+        );
+
+        await client.close();
+        await server.close();
+    });
+
     it("should not proxify any property functions in an instance", async () => {
         let server = await App.serve(config);
         let client = await App.connect(config);

@@ -7,18 +7,28 @@ import { BiMap } from "advanced-collections";
 import { isIteratorLike } from "check-iterable";
 import { source, ThenableAsyncGenerator } from "thenable-generator";
 import isSocketResetError = require("is-socket-reset-error");
-import { RpcChannel, RpcEvents, Request } from "./channel";
+import { RpcChannel, RpcEvents, Request, RpcOptions } from "./channel";
 import { absPath, local } from "../util";
 
 const authorized = Symbol("authorized");
 
 export class RpcServer extends RpcChannel {
+    /** The unique ID of the server, used for the client routing requests. */
+    readonly id: string;
     protected server: net.Server;
     protected registry: { [name: string]: ModuleProxy<any> } = {};
     protected clients = new BiMap<string, net.Socket>();
     protected suspendedTasks = new Map<net.Socket, {
         [taskId: number]: ThenableAsyncGenerator;
     }>();
+
+    constructor(path: string);
+    constructor(port: number, host?: string);
+    constructor(options: RpcOptions);
+    constructor(options: string | number | RpcOptions, host?: string) {
+        super(<any>options, host);
+        this.id = this.id || this.dsn;
+    }
 
     open(): Promise<this> {
         return new Promise(async (resolve, reject) => {
@@ -148,7 +158,7 @@ export class RpcServer extends RpcChannel {
                         this.suspendedTasks.set(socket, {});
                         // Send CONNECT event to notify the client that the 
                         // connection is finished.
-                        this.dispatch(socket, RpcEvents.CONNECT);
+                        this.dispatch(socket, RpcEvents.CONNECT, taskId, this.id);
                         break;
 
                     case RpcEvents.PING:

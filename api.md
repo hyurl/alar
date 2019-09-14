@@ -25,8 +25,8 @@ The interface has the following properties and methods:
 - `instance(route?: any): T` Gets the local singleton or a remote instance of 
     the module, if connected to one or more remote instances, the module proxy 
     will automatically calculate the `route` and direct the traffic to the 
-    corresponding remote instance. If the given route matches the DSN of any 
-    remote service, the corresponding singleton will be returned instead.
+    corresponding remote instance. If the given route matches the server ID of 
+    any remote service, the corresponding singleton will be returned instead.
 - `inject(route?: any): PropertyDecorator` Allowing the current module to be 
     injected as a dependency bound to a property of another class instance.
 - `noLocal(): this` If the module is registered as remote service, however when 
@@ -159,6 +159,7 @@ interface RpcOptions {
     port?: number;
     path?: string;
     secret?: string;
+    id?: string;
 }
 ```
 
@@ -170,6 +171,11 @@ the `host` and `port`.
 If a `secret` key is set, the client must provide the same key when connect,
 otherwise the server will reject.
 
+The `id` property is of ambiguity. On the server side, if omitted, it will fall
+back to `dsn`, used for the client routing requests. On the client side, if
+omitted, a random string will be generated, used for the server publishing
+events.
+
 ## RpcChannel
 
 ```typescript
@@ -177,11 +183,12 @@ abstract class RpcChannel implements RpcOptions { }
 ```
 
 This abstract class just indicates the RPC channel that allows modules to 
-communicate remotely. `ModuleProxy.serve()` and `ModuleProxy.connect()` return 
-its server and client implementations.
+communicate remotely. methods `ModuleProxy.serve()` and `ModuleProxy.connect()`
+return its server and client implementations accordingly.
 
 The following properties and methods work in both implementations:
 
+- `id: string` The unique ID of the server or the client.
 - `dsn: string` Gets the data source name according to the configuration.
 - `open(): Promise<this>` Opens the channel. This method is internally called by
     `ModuleProxy.serve()` and `ModuleProxy.connect()`, you don't have to call it.
@@ -212,14 +219,10 @@ The server implementation of the RPC channel.
 
 ```typescript
 interface ClientOptions extends RpcOptions {
-    id?: string;
     timeout?: number;
     pingInterval?: number;
 }
 ```
-
-The `id` is used for the server publishing events to specified clients, if not 
-provided, a random string will be generated.
 
 By default `timeout` is set `5000`ms, it is used to force a timeout error when
 a RPC request fires and doesn't get response after a long time.

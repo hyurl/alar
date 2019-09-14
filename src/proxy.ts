@@ -25,7 +25,7 @@ export class ModuleProxyBase<T = any> extends Injectable implements ModuleProxy<
     readonly path: string;
     protected loader: ModuleLoader = defaultLoader;
     protected singletons: { [name: string]: T } = {};
-    protected remoteSingletons: { [dsn: string]: T } = {};
+    protected remoteSingletons: { [serverId: string]: T } = {};
     protected children: { [name: string]: ModuleProxy<any> } = {};
 
     constructor(readonly name: string, path: string) {
