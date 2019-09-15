@@ -246,7 +246,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
                 data.pop();
             }
 
-            this.socket.write(data);
+            this.socket.write(<any>data);
         }
     }
 

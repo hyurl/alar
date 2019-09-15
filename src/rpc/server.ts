@@ -111,7 +111,7 @@ export class RpcServer extends RpcChannel {
 
     protected dispatch(socket: net.Socket, ...data: any[]) {
         if (!socket.destroyed && socket.writable) {
-            socket.write(data);
+            socket.write(<any>data);
         }
     }
 
