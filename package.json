@@ -1,6 +1,6 @@
 {
   "name": "alar",
-  "version": "4.3.1",
+  "version": "4.3.2",
   "description": "Auto-Load And Remote.",
   "main": "dist/index.js",
   "types": "src/index.ts",

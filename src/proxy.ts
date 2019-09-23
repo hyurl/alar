@@ -2,7 +2,7 @@ import hash = require("string-hash");
 import objectHash = require("object-hash");
 import { sep, normalize, dirname, basename, extname } from "path";
 import { applyMagic } from "js-magic";
-import { createLocalInstance, local, remotized, noLocal } from './util';
+import { createLocalInstance, local, remotized, noLocal, set } from './util';
 import { ModuleLoader } from './index';
 import { deprecate } from "util";
 import { Injectable } from "./di";
@@ -23,7 +23,7 @@ const defaultLoader: ModuleLoader = {
 @applyMagic
 export class ModuleProxyBase<T = any> extends Injectable implements ModuleProxy<T> {
     readonly path: string;
-    protected loader: ModuleLoader = defaultLoader;
+    readonly loader: ModuleLoader = defaultLoader;
     protected singletons: { [name: string]: T } = {};
     protected remoteSingletons: { [serverId: string]: T } = {};
     protected children: { [name: string]: ModuleProxy<any> } = {};
@@ -135,7 +135,7 @@ export class ModuleProxyBase<T = any> extends Injectable implements ModuleProxy<
             );
 
             child.singletons = this.singletons;
-            child.loader = this.loader;
+            set(child, "loader", this.loader);
 
             return this.children[prop] = child;
         }

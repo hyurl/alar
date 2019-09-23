@@ -43,6 +43,7 @@ declare global {
         readonly name: string;
         /** The path (without extension) of the module. */
         readonly path: string;
+        readonly loader: ModuleLoader;
         /** The very exports object of the module. */
         readonly exports: any;
         /** The very prototype of the module. */
@@ -177,7 +178,7 @@ export class ModuleProxy extends ModuleProxyBase {
 
     /** Sets a custom loader to resolve the module. */
     setLoader(loader: ModuleLoader) {
-        this.loader = loader;
+        util.set(this, "loader", loader);
     }
 }
 
