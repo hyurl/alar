@@ -705,13 +705,15 @@ describe("Alar ModuleProxy", () => {
 
     it("should watch file change and reload module as expected", async function () {
         this.timeout(15000)
-        let watcher = App.watch();
         let contents = await fs.readFile(app.service.user.path + ".js", "utf8");
         let newContents = contents.replace("return this.name", "return this.name + ' Budy'");
+        let watcher = App.watch();
+
+        await new Promise(resolve => watcher.once("ready", resolve));
 
         assert.strictEqual(await app.service.user.instance(App.local).getName(), "Mr. World");
 
-        await sleep(500); // wait a while for watcher to be ready
+        // await sleep(500); // wait a while for watcher to be ready
         fs.writeFileSync(app.service.user.path + ".js", newContents, "utf8");
         await new Promise(resolve => watcher.once("change", resolve));
 

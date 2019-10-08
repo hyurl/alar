@@ -160,7 +160,17 @@ export class ModuleProxy extends ModuleProxyBase {
         return watch(path, {
             awaitWriteFinish: true,
             followSymlinks: false,
-            ignored: /\.(js\.map|d\.ts)$/
+            ignored: (file: string) => {
+                let ext = extname(file);
+
+                if (!ext) {
+                    return false;
+                } else if (typeof this.loader.extension === "string") {
+                    return this.loader.extension !== ext;
+                } else {
+                    return !this.loader.extension.includes(ext);
+                }
+            }
         }).on("change", (filename) => {
             clearCache("change", filename, listener);
         }).on("unlink", (filename) => {
