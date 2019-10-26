@@ -1,6 +1,6 @@
 {
   "name": "alar",
-  "version": "4.3.3",
+  "version": "4.3.4",
   "description": "Auto-Load And Remote.",
   "main": "dist/index.js",
   "types": "src/index.ts",
@@ -38,7 +38,7 @@
     "@types/fs-extra": "^5.1.0",
     "advanced-collections": "^0.1.2",
     "backoff": "^2.5.0",
-    "bsp": "^1.0.0",
+    "bsp": "^1.1.0",
     "check-iterable": "^1.0.2",
     "chokidar": "^3.2.1",
     "err2obj": "^1.0.1",
