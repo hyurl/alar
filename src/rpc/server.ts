@@ -65,8 +65,17 @@ export class RpcServer extends RpcChannel {
     close(): Promise<this> {
         return new Promise(resolve => {
             if (this.server) {
+                let timer = setTimeout(() => {
+                    for (let [, socket] of this.clients) {
+                        socket.destroy();
+                    }
+                }, 1000);
+
                 this.server.unref();
-                this.server.close(() => resolve(this));
+                this.server.close(() => {
+                    clearTimeout(timer);
+                    resolve(this);
+                });
             } else {
                 resolve(this);
             }
