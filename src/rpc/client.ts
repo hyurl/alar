@@ -79,6 +79,11 @@ export class RpcClient extends RpcChannel implements ClientOptions {
                 this.prepareChannel();
                 this.finishConnect = () => {
                     this.state = "connected";
+
+                    if (this.pingTimer && this.reconConter) {
+                        return resolve(this);
+                    }
+
                     this.pingTimer = setInterval(() => {
                         // The strategy is, we only need to send a PING signal
                         // to the server, and don't have to concern about
