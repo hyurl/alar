@@ -2,7 +2,7 @@ import * as net from "net";
 import sequid from "sequid";
 import { obj2err, err2obj } from 'err2obj';
 import { wrap } from 'bsp';
-import { exponential } from "backoff";
+import { exponential, Backoff } from "backoff";
 import isSocketResetError = require('is-socket-reset-error');
 import { ThenableAsyncGenerator, ThenableAsyncGeneratorLike } from 'thenable-generator';
 import { RpcChannel, RpcEvents, RpcOptions, Response, Request } from "./channel";
@@ -35,41 +35,8 @@ export class RpcClient extends RpcChannel implements ClientOptions {
     protected finishConnect: Function = null;
     private lastActiveTime: number = Date.now();
     protected selfDestruction: NodeJS.Timer = null;
-    protected pingTimer = setInterval(() => {
-        // The strategy is, we only need to send a PING signal to the server,
-        // and don't have to concern about whether the server would or would not
-        // response a PONG signal, we only need to detect if any data is 
-        // received from the server, and refresh the lastActiveTime to prevent
-        // sending too much unnecessary PING/PONG frame.
-        if (Date.now() - this.lastActiveTime >= this.pingInterval) {
-            this.selfDestruction = setTimeout(
-                this.socket.destroy.bind(this.socket),
-                this.timeout
-            );
-
-            this.send(RpcEvents.PING, this.id);
-        }
-    }, 5000);
-    private reconConter = exponential({
-        maxDelay: 9600
-    }).on("ready", async (num) => {
-        // Retry connect in exponential timeout.
-        try {
-            await this.open();
-        } catch (e) { }
-
-        if (this.connected) {
-            this.reconConter.reset();
-            this.resume(); // resume service
-        } else if (num === 18) {
-            // If tried 18 times (about 2 minutes) and still have no connection,
-            // then consider the server is down permanently and close the client. 
-            await this.close();
-            console.error(`Connection to ${this.serverId} is lost permanently.`);
-        } else {
-            this.reconConter.backoff();
-        }
-    });
+    protected pingTimer: NodeJS.Timer = null;
+    private reconConter: Backoff = null;
 
     constructor(path: string);
     constructor(port: number, host?: string);
@@ -112,6 +79,48 @@ export class RpcClient extends RpcChannel implements ClientOptions {
                 this.prepareChannel();
                 this.finishConnect = () => {
                     this.state = "connected";
+                    this.pingTimer = setInterval(() => {
+                        // The strategy is, we only need to send a PING signal
+                        // to the server, and don't have to concern about
+                        // whether the server would or would not response a PONG
+                        // signal, we only need to detect if any data is
+                        // received from the server, and refresh the
+                        // lastActiveTime to prevent  sending too much
+                        // unnecessary PING/PONG frame.
+                        let duration = Date.now() - this.lastActiveTime;
+                        if (duration >= this.pingInterval) {
+                            this.selfDestruction = setTimeout(
+                                this.socket.destroy.bind(this.socket),
+                                this.timeout
+                            );
+
+                            this.send(RpcEvents.PING, this.id);
+                        }
+                    }, 5000);
+                    this.reconConter = exponential({
+                        maxDelay: 9600
+                    }).on("ready", async (num) => {
+                        // Retry connect in exponential timeout.
+                        try {
+                            await this.open();
+                        } catch (e) { }
+
+                        if (this.connected) {
+                            this.reconConter.reset();
+                            this.resume(); // resume service
+                        } else if (num === 18) {
+                            // If tried 18 times (about 2 minutes) and still
+                            // have no connection, then consider the server is
+                            // down permanently and close the client. 
+                            await this.close();
+                            console.error(
+                                `Connection to ${this.serverId} lost permanently.`
+                            );
+                        } else {
+                            this.reconConter.backoff();
+                        }
+                    });
+
                     resolve(this);
                 };
 
