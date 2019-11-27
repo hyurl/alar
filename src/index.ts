@@ -91,6 +91,11 @@ export interface ModuleLoader {
      * ts-node).
      */
     extension: string | string[],
+    /**
+     * It is recommended using this property to store loaded modules, so that
+     * the internal watcher can manipulate the cache when necessary.
+     */
+    cache?: { [filename: string]: any };
     /** Loads module from the given file or cache. */
     load(filename: string): any;
     /** Unloads the module in cache if the file is modified. */
@@ -150,7 +155,7 @@ export class ModuleProxy extends ModuleProxyBase {
         let clearCache = (event: string, filename: string, cb: Function) => {
             let name = this.resolve(filename);
 
-            if (name) {
+            if (name && this.singletons[name]) {
                 delete this.singletons[name];
                 this.loader.unload(filename);
                 cb && cb(event, filename);
@@ -178,9 +183,11 @@ export class ModuleProxy extends ModuleProxyBase {
         }).on("unlinkDir", dirname => {
             dirname = dirname + sep;
 
-            for (let filename in require.cache) {
-                if (startsWith(filename, dirname)) {
-                    clearCache("unlink", filename, listener);
+            if (this.loader.cache) {
+                for (let filename in this.loader.cache) {
+                    if (startsWith(filename, dirname)) {
+                        clearCache("unlink", filename, listener);
+                    }
                 }
             }
         });

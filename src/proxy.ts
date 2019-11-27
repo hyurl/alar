@@ -14,9 +14,10 @@ const cmd = process.execArgv.concat(process.argv).join(" ");
 const isTsNode = cmd.includes("ts-node");
 const defaultLoader: ModuleLoader = {
     extension: isTsNode ? ".ts" : ".js",
+    cache: require.cache,
     load: require,
     unload(filename) {
-        delete require.cache[filename];
+        delete this.cache[filename];
     }
 }
 
