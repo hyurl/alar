@@ -62,7 +62,7 @@ export class ModuleProxyBase<T = any> extends Injectable implements ModuleProxy<
         }
     }
 
-    get proto(): T {
+    get proto(): EnsureInstanceType<T> {
         let { exports } = this;
 
         if (typeof exports.default === "object")
@@ -77,7 +77,7 @@ export class ModuleProxyBase<T = any> extends Injectable implements ModuleProxy<
             return null;
     }
 
-    get ctor(): ModuleConstructor<T> {
+    get ctor(): ModuleConstructor<EnsureInstanceType<T>> {
         let { exports } = this;
 
         if (typeof exports.default === "function")
@@ -88,11 +88,10 @@ export class ModuleProxyBase<T = any> extends Injectable implements ModuleProxy<
             return null;
     }
 
-    create(...args: any[]): T {
+    create(...args: any[]): EnsureInstanceType<T> {
         if (this.ctor) {
             return new this.ctor(...args);
         } else if (this.proto) {
-            // return Object.create(<any>this.proto);
             return merge(cloneDeep(this.proto), args[0]);
         } else {
             throw new TypeError(`${this.name} is not a valid module`);
@@ -132,7 +131,7 @@ export class ModuleProxyBase<T = any> extends Injectable implements ModuleProxy<
         }
     }
 
-    remote(route: any = ""): T {
+    remote(route: any = "") {
         return this.instance(route);
     }
 

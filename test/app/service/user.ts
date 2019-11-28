@@ -4,7 +4,7 @@ import data from "../../data";
 declare global {
     namespace app {
         namespace service {
-            const user: ModuleProxy<User, string>;
+            const user: ModuleProxy<typeof User>;
         }
     }
 }

@@ -76,7 +76,9 @@ export default class Bootstrap {
 declare global {
     namespace app {
         namespace service {
-            const user: ModuleProxy<User>
+            // Since class User takes a parameter, passing `typeof User` will
+            // provide more accurate type hint for `create()` method.
+            const user: ModuleProxy<typeof User>
         }
     }
 }
@@ -145,7 +147,7 @@ IPC channel, I just have to do this:
 declare global {
     namespace app {
         namespace service {
-            const user: ModuleProxy<User>
+            const user: ModuleProxy<typeof User>
         }
     }
 }
@@ -172,7 +174,7 @@ import { App } from "./app";
 (async () => {
     let service = await App.serve("/tmp/my-app/remote-service.sock");
 
-    await service.register(app.service.user);
+    service.register(app.service.user);
 
     console.log("Service started!");
 })();
@@ -190,7 +192,7 @@ import { App } from "./app";
 (async () => {
     let service = await App.connect("/tmp/my-app/remote-service.sock");
 
-    await service.register(app.service.user);
+    service.register(app.service.user);
 
     // Access the instance in local style but actually remote.
     console.log(await app.service.user.instance().getName()); // Mr. Handsome
@@ -321,15 +323,15 @@ of injection less useful.
 Since 5.0, Alar now supports life cycle functions, if a service class contains
 an `init()` method, it will be used to perform asynchronous initiation, for
 example, connecting to a database. And if it contains a `destroy()` method, it
-will be use to perform asynchronous destruction, to release resources.
+will be used to perform asynchronous destruction, to release resources.
 
 To enable this feature, after all needed modules are registered (and any other
 preparations are done), call the `RpcServer.init()` method to perform
-initiation processes for every registered modules.
+initiation process for every registered module.
 
-This features will still work after hot-reloaded the module. However, there
-would be a slight downtime when hot-reloading the module, and any call would
-fail until the module is re-available again.
+This feature will still work after hot-reloaded the module. However, there
+would be a slight downtime during hot-reloading, and any call would fail until
+the service is re-available again.
 
 ```ts
 // src/service/user.ts
@@ -351,9 +353,12 @@ export default class User {
     }
 }
 
-server.register(app.services.user);
 
-await server.init();
+(async () => {
+    server.register(app.services.user);
+
+    await server.init();
+})();
 ```
 
 For more details, please check the [API documentation](./api.md).

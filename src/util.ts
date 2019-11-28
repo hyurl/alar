@@ -34,8 +34,8 @@ export function set(target: any, prop: any, value: any, writable = false) {
     });
 }
 
-export function getInstance<T>(mod: ModuleProxy<T>, instantiate = true): T {
-    let ins: T;
+export function getInstance(mod: ModuleProxy<any>, instantiate = true) {
+    let ins: any;
     let { ctor } = mod;
 
     if (ctor) {
