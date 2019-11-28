@@ -16,15 +16,23 @@ export default class User {
         this.propFn = () => { };
     }
 
-    async setName(name: string) {
+    async init() {
+        this.setName("Mr. Handsome");
+    }
+
+    async destroy() {
+        this.setName("Mr. World");
+    }
+
+    setName(name: string) {
         this.name = name;
     }
 
-    async getName() {
+    getName() {
         return this.name;
     }
 
-    async *getFriends(...args: string[]) {
+    *getFriends(...args: string[]) {
         yield "Mozilla";
         yield "GitHub";
         yield "Linux";

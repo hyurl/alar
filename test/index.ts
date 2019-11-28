@@ -59,8 +59,8 @@ describe("Alar ModuleProxy", () => {
         assert.ok(user2 instanceof User);
         assert.strictEqual(user1.name, "Mr. Handsome");
         assert.strictEqual(user2.name, "Mr. World");
-        assert.strictEqual(await user1.getName(), user1.name);
-        assert.strictEqual(await user2.getName(), user2.name);
+        assert.strictEqual(user1.getName(), user1.name);
+        assert.strictEqual(user2.getName(), user2.name);
     });
 
     it("should create instance via ctor property as expected", () => {
@@ -71,11 +71,11 @@ describe("Alar ModuleProxy", () => {
         assert.deepStrictEqual(bootstrap.data, ["hello", "world"]);
     });
 
-    it("should get singleton instance via instance() method as expected", () => {
-        app.service.user.instance(alar.util.local).name = "Mr. Handsome";
+    it("should get singleton instance via instance() method as expected", async () => {
+        await app.service.user.instance(alar.local).setName("Mr. Handsome");
         assert.ok(app.service.user.instance() instanceof User);
         assert.strictEqual(app.service.user.instance().name, "Mr. Handsome");
-        app.service.user.instance(alar.util.local).name = "Mr. World";
+        await app.service.user.instance(alar.local).setName("Mr. World");
         assert.strictEqual(app.service.user.instance().name, "Mr. World");
     });
 
@@ -157,13 +157,13 @@ describe("Alar ModuleProxy", () => {
         let sockPath = process.cwd() + "/alar.sock";
         let server = await App.serve(sockPath);
 
-        server.register(app.service.user);
+        await server.register(app.service.user);
 
         let client = await App.connect(sockPath);
 
-        client.register(app.service.user);
+        await client.register(app.service.user);
 
-        assert.strictEqual(await app.service.user.instance().getName(), "Mr. World");
+        assert.strictEqual(await app.service.user.instance().getName(), "Mr. Handsome");
 
         await client.close();
         await server.close();
@@ -172,13 +172,13 @@ describe("Alar ModuleProxy", () => {
     it("should serve an RPC service as expected", async () => {
         let server = await App.serve(config);
 
-        server.register(app.service.user);
+        await server.register(app.service.user);
 
         let client = await App.connect(config);
 
-        client.register(app.service.user);
+        await client.register(app.service.user);
 
-        assert.strictEqual(await app.service.user.instance().getName(), "Mr. World");
+        assert.strictEqual(await app.service.user.instance().getName(), "Mr. Handsome");
 
         await client.close();
         await server.close();
@@ -188,13 +188,13 @@ describe("Alar ModuleProxy", () => {
         let _config = Object.assign({ secret: "abcdefg" }, config);
         let server = await App.serve(_config);
 
-        server.register(app.service.user);
+        await server.register(app.service.user);
 
         let client = await App.connect(_config);
 
-        client.register(app.service.user);
+        await client.register(app.service.user);
 
-        assert.strictEqual(await app.service.user.instance().getName(), "Mr. World");
+        assert.strictEqual(await app.service.user.instance().getName(), "Mr. Handsome");
 
         await client.close();
         await server.close();
@@ -214,8 +214,8 @@ describe("Alar ModuleProxy", () => {
         let server = await App.serve(config);
         let client = await App.connect(config);
 
-        server.register(app.service.user);
-        client.register(app.service.user);
+        await server.register(app.service.user);
+        await client.register(app.service.user);
 
         assert.ok(app.service.user.instance() !== app.service.user.instance(App.local));
 
@@ -264,7 +264,7 @@ describe("Alar ModuleProxy", () => {
         let proc = await fork(filename);
         let client = await App.connect(config);
 
-        client.register(app.service.user);
+        await client.register(app.service.user);
 
         // kill the server and restart it, the client will reconnect in the
         // background automatically.
@@ -396,8 +396,8 @@ describe("Alar ModuleProxy", () => {
         let client = await App.connect(config);
         let result: (string | string[])[] = [];
 
-        server.register(app.service.user);
-        client.register(app.service.user);
+        await server.register(app.service.user);
+        await client.register(app.service.user);
 
         let generator = app.service.user.instance().getFriends("Open Source", "Good Fella");
         while (true) {
@@ -420,8 +420,8 @@ describe("Alar ModuleProxy", () => {
         let server = await App.serve(config);
         let client = await App.connect(config);
 
-        server.register(app.service.user);
-        client.register(app.service.user);
+        await server.register(app.service.user);
+        await client.register(app.service.user);
 
         let generator = app.service.user.instance().repeatAfterMe();
         let result = await generator.next(<any>"Google");
@@ -438,8 +438,8 @@ describe("Alar ModuleProxy", () => {
         let server = await App.serve(config);
         let client = await App.connect(config);
 
-        server.register(app.service.user);
-        client.register(app.service.user);
+        await server.register(app.service.user);
+        await client.register(app.service.user);
 
         let generator = app.service.user.instance().repeatAfterMe();
         let result = await generator.return("Google");
@@ -455,8 +455,8 @@ describe("Alar ModuleProxy", () => {
         let server = await App.serve(config);
         let client = await App.connect(config);
 
-        server.register(app.service.user);
-        client.register(app.service.user);
+        await server.register(app.service.user);
+        await client.register(app.service.user);
 
         let generator = app.service.user.instance().repeatAfterMe();
         let _err = new Error("test throw method");
@@ -480,7 +480,8 @@ describe("Alar ModuleProxy", () => {
 
     it("should get result from a local generator as expected", async () => {
         let result: (string | string[])[] = [];
-        let generator = app.service.user.instance(App.local).getFriends("Open Source", "Good Fella");
+        let generator = app.service.user.instance(App.local)
+            .getFriends("Open Source", "Good Fella");
 
         while (true) {
             let res = await generator.next();
@@ -543,8 +544,8 @@ describe("Alar ModuleProxy", () => {
         let server = await App.serve(config);
         let client = await App.connect(config);
 
-        server.register(app.service.user);
-        client.register(app.service.user);
+        await server.register(app.service.user);
+        await client.register(app.service.user);
         alar.RpcChannel.registerError(MyError);
 
         let err: MyError;
@@ -568,8 +569,8 @@ describe("Alar ModuleProxy", () => {
         let server = await App.serve(config);
         let client = await App.connect(config);
 
-        server.register(app.service.user);
-        client.register(app.service.user);
+        await server.register(app.service.user);
+        await client.register(app.service.user);
         alar.RpcChannel.registerError(MyError);
 
         let err: string;
@@ -590,8 +591,8 @@ describe("Alar ModuleProxy", () => {
         let server = await App.serve(config);
         let client = await App.connect(config);
 
-        server.register(app.service.user);
-        client.register(app.service.user);
+        await server.register(app.service.user);
+        await client.register(app.service.user);
 
         let time = Date.now();
 
@@ -612,8 +613,8 @@ describe("Alar ModuleProxy", () => {
         let server = await App.serve(config);
         let client = await App.connect(config);
 
-        server.register(app.service.user);
-        client.register(app.service.user);
+        await server.register(app.service.user);
+        await client.register(app.service.user);
 
         let promise = app.service.user.instance().setAndGet("Hello, World!");
 
@@ -629,8 +630,8 @@ describe("Alar ModuleProxy", () => {
         let server = await App.serve(config);
         let client = await App.connect(config);
 
-        server.register(app.service.user);
-        client.register(app.service.user);
+        await server.register(app.service.user);
+        await client.register(app.service.user);
 
         assert.strictEqual(
             app.service.user.instance(server.dsn),
@@ -646,8 +647,8 @@ describe("Alar ModuleProxy", () => {
         let server = await App.serve(_config);
         let client = await App.connect(config);
 
-        server.register(app.service.user);
-        client.register(app.service.user);
+        await server.register(app.service.user);
+        await client.register(app.service.user);
 
         assert.strictEqual(
             app.service.user.instance("test-server"),
@@ -663,8 +664,8 @@ describe("Alar ModuleProxy", () => {
         let client = await App.connect(config);
         let newFn = () => { };
 
-        server.register(app.service.user);
-        client.register(app.service.user);
+        await server.register(app.service.user);
+        await client.register(app.service.user);
 
         assert.strictEqual(app.service.user.instance(App.local).setName["proxified"], true);
         assert.strictEqual(app.service.user.instance(App.local)["propFn"]["proxified"], undefined);
@@ -683,7 +684,7 @@ describe("Alar ModuleProxy", () => {
             @app.service.user.inject()
             protected admin: User;
 
-            getAdminName(): Promise<string> {
+            async getAdminName(): Promise<string> {
                 return this.admin.getName();
             }
         }
@@ -692,10 +693,10 @@ describe("Alar ModuleProxy", () => {
         let client = await App.connect(config);
         let article = new Article;
 
-        server.register(app.service.user);
-        client.register(app.service.user);
+        await server.register(app.service.user);
+        await client.register(app.service.user);
 
-        assert.strictEqual(await article.getAdminName(), "Mr. World");
+        assert.strictEqual(await article.getAdminName(), "Mr. Handsome");
 
         await client.close();
         await server.close();

@@ -81,5 +81,5 @@ export abstract class RpcChannel implements RpcOptions {
     abstract close(): Promise<this>;
 
     /** Registers a module proxy to the channel. */
-    abstract register<T extends object>(mod: ModuleProxy<T>): this;
+    abstract register<T extends object>(mod: ModuleProxy<T>): Promise<this>;
 }

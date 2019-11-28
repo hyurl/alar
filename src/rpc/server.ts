@@ -8,7 +8,8 @@ import { isIteratorLike } from "check-iterable";
 import { source, ThenableAsyncGenerator } from "thenable-generator";
 import isSocketResetError = require("is-socket-reset-error");
 import { RpcChannel, RpcEvents, Request, RpcOptions } from "./channel";
-import { absPath, local } from "../util";
+import { absPath, local, RpcState, tryLifeCycleFunction } from "../util";
+import { ModuleProxyBase } from '..';
 
 const authorized = Symbol("authorized");
 
@@ -62,8 +63,8 @@ export class RpcServer extends RpcChannel {
         });
     }
 
-    close(): Promise<this> {
-        return new Promise(resolve => {
+    async close(): Promise<this> {
+        await new Promise<void>(resolve => {
             if (this.server) {
                 let timer = setTimeout(() => {
                     for (let [, socket] of this.clients) {
@@ -74,16 +75,34 @@ export class RpcServer extends RpcChannel {
                 this.server.unref();
                 this.server.close(() => {
                     clearTimeout(timer);
-                    resolve(this);
+                    resolve();
                 });
             } else {
-                resolve(this);
+                resolve();
             }
         });
+
+        for (let name in this.registry) {
+            let mod = <ModuleProxy<any> & ModuleProxyBase>this.registry[name];
+
+            mod[RpcState] = 2;
+
+            if (mod["singletons"][mod.name]) {
+                await tryLifeCycleFunction(mod, "destroy");
+            }
+
+            mod[RpcState] = 0;
+        }
+
+        return this;
     }
 
-    register<T>(mod: ModuleProxy<T>): this {
+    async register<T>(mod: ModuleProxy<T>) {
         this.registry[mod.name] = mod;
+        mod[RpcState] = 0;
+        await tryLifeCycleFunction(<ModuleProxyBase>mod, "init");
+        mod[RpcState] = 1;
+
         return this;
     }
 

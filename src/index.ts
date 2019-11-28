@@ -5,7 +5,7 @@ import { RpcOptions, RpcChannel } from './rpc/channel';
 import { RpcClient, ClientOptions } from "./rpc/client";
 import { RpcServer } from "./rpc/server";
 import { ModuleProxyBase } from "./proxy";
-import * as util from './util';
+import { local, RpcState, tryLifeCycleFunction, set } from './util';
 
 export {
     ModuleProxyBase,
@@ -15,7 +15,7 @@ export {
     RpcClient,
     ClientOptions,
     FSWatcher,
-    util
+    local
 };
 
 // Auto-Load And Remote.
@@ -29,6 +29,14 @@ declare global {
     }[keyof T];
     type FunctionProperties<T> = Pick<T, FunctionPropertyNames<T>>;
     type NonFunctionProperties<T> = Pick<T, NonFunctionPropertyNames<T>>;
+    type AsynchronizedFunctionProperties<T> = {
+        [K in keyof FunctionProperties<T>]: ReturnType<T[K]> extends Promise<any>
+        ? T[K]
+        : (ReturnType<T[K]> extends (AsyncIterableIterator<infer U> | IterableIterator<infer U>)
+            ? (...args: Parameters<T[K]>) => AsyncIterableIterator<U> & Promise<U>
+            : (...args: Parameters<T[K]>) => Promise<ReturnType<T[K]>>
+        );
+    }
     type Voidable<T> = {
         [K in keyof T]: T[K] | void
     }
@@ -65,9 +73,8 @@ declare global {
          * automatically calculate the `route` and direct the traffic to the 
          * corresponding remote instance.
          */
-        instance(local: symbol): T;
-        instance(route?: any): FunctionProperties<T> &
-            Voidable<Readonly<NonFunctionProperties<T>>>;
+        instance(local: symbol): AsynchronizedFunctionProperties<T> & Readonly<NonFunctionProperties<T>>;
+        instance(route?: any): AsynchronizedFunctionProperties<T> & Voidable<Readonly<NonFunctionProperties<T>>>;
 
         /**
          * If the module is registered as remote service, however when no RPC 
@@ -107,7 +114,7 @@ export class ModuleProxy extends ModuleProxyBase {
      * If passed to the `ModuleProxy<T>.instance()`, the method will always 
      * return the local instance.
      */
-    local = util.local;
+    local = local;
 
     get exports() {
         return {};
@@ -152,12 +159,31 @@ export class ModuleProxy extends ModuleProxyBase {
     /** Watches file change and reload the corresponding module. */
     watch(listener?: (event: "change" | "unlink", filename: string) => void) {
         let { path } = this;
-        let clearCache = (event: string, filename: string, cb: Function) => {
+        let clearCache = async (
+            event: "change" | "unlink",
+            filename: string,
+            cb: Parameters<ModuleProxy["watch"]>[0]
+        ) => {
             let name = this.resolve(filename);
 
             if (name && this.singletons[name]) {
-                delete this.singletons[name];
-                this.loader.unload(filename);
+                try {
+                    if (this[RpcState]) {
+                        this[RpcState] = 2;
+                        await tryLifeCycleFunction(this, "destroy");
+                    }
+
+                    delete this.singletons[name];
+                    this.loader.unload(filename);
+
+                    if (this[RpcState]) {
+                        await tryLifeCycleFunction(this, "init");
+                        this[RpcState] = 1;
+                    }
+                } catch (err) {
+                    console.error(err);
+                }
+
                 cb && cb(event, filename);
             }
         };
@@ -195,7 +221,7 @@ export class ModuleProxy extends ModuleProxyBase {
 
     /** Sets a custom loader to resolve the module. */
     setLoader(loader: ModuleLoader) {
-        util.set(this, "loader", loader);
+        set(this, "loader", loader);
     }
 }
 

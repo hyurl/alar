@@ -172,7 +172,7 @@ import { App } from "./app";
 (async () => {
     let service = await App.serve("/tmp/my-app/remote-service.sock");
 
-    service.register(app.service.user);
+    await service.register(app.service.user);
 
     console.log("Service started!");
 })();
@@ -190,7 +190,7 @@ import { App } from "./app";
 (async () => {
     let service = await App.connect("/tmp/my-app/remote-service.sock");
 
-    service.register(app.service.user);
+    await service.register(app.service.user);
 
     // Access the instance in local style but actually remote.
     console.log(await app.service.user.instance().getName()); // Mr. Handsome
@@ -315,5 +315,38 @@ hood, the hot-reloading model will still work fine.
 However, Alar doesn't provide a way to inject new instances dynamically, since
 every new instance will create a strong reference itself, that makes that kind
 of injection less useful.
+
+## Life Cycle Support
+
+Since 5.0, Alar now supports life cycle functions, if a service class contains
+an `init()` method, it will be used to perform asynchronous initiation, for
+example, connecting to a database. And if it contains a `destroy()` method, it
+will be use to perform asynchronous destruction, to release resources.
+
+Both these methods will only work when the service is registered to the
+RpcServer, and will still work after hot-reloaded the module. However, there
+would be a slight downtime when hot-reloading the module, and any call would
+fail until the module is re-available again.
+
+```ts
+// src/service/user.ts
+declare global {
+    namespace app {
+        namespace service {
+            const user: ModuleProxy<User>
+        }
+    }
+}
+
+export default class User {
+    async init() {
+        // ...
+    }
+
+    async destroy() {
+        // ...
+    }
+}
+```
 
 For more details, please check the [API documentation](./api.md).

@@ -2,13 +2,19 @@ import hash = require("string-hash");
 import objectHash = require("object-hash");
 import { sep, normalize, dirname, basename, extname } from "path";
 import { applyMagic } from "js-magic";
-import { createLocalInstance, local, remotized, noLocal, set } from './util';
 import { ModuleLoader } from './index';
-import { deprecate } from "util";
 import { Injectable } from "./di";
 import { readdirSync } from 'fs';
 import cloneDeep = require("lodash/cloneDeep");
 import merge = require("lodash/merge");
+import {
+    createLocalInstance,
+    local,
+    remotized,
+    noLocal,
+    set,
+    RpcState
+} from './util';
 
 const cmd = process.execArgv.concat(process.argv).join(" ");
 const isTsNode = cmd.includes("ts-node");
@@ -32,6 +38,7 @@ export class ModuleProxyBase<T = any> extends Injectable implements ModuleProxy<
     constructor(readonly name: string, path: string) {
         super();
         this.path = normalize(path);
+        this[RpcState] = 0;
     }
 
     get exports(): any {
@@ -92,7 +99,7 @@ export class ModuleProxyBase<T = any> extends Injectable implements ModuleProxy<
         }
     }
 
-    instance(route: any = ""): T {
+    instance(route: any = "", ignoreState = false): any {
         // If the route matches the any key of the remoteSingletons, return the
         // corresponding singleton as wanted.
         if (typeof route === "string" && this.remoteSingletons[route]) {
@@ -101,7 +108,17 @@ export class ModuleProxyBase<T = any> extends Injectable implements ModuleProxy<
 
         let keys = Object.keys(this.remoteSingletons);
 
-        if (route === local || !this[remotized] || (!keys.length && !this[noLocal])) {
+        if (route === local || !this[remotized] ||
+            (!keys.length && !this[noLocal])
+        ) {
+            if (this[RpcState] && this[RpcState] !== 1 &&
+                this.singletons[this.name] && !ignoreState
+            ) {
+                throw new ReferenceError(
+                    `Service ${this.name} is not available`
+                );
+            }
+
             return this.singletons[this.name] || (
                 this.singletons[this.name] = createLocalInstance(<any>this)
             );
@@ -146,8 +163,3 @@ export class ModuleProxyBase<T = any> extends Injectable implements ModuleProxy<
         return (prop in this) || (prop in this.children);
     }
 }
-
-ModuleProxyBase.prototype.remote = deprecate(
-    ModuleProxyBase.prototype.remote,
-    "ModuleProxy<T>.route() has been deprecated, use ModuleProxy<T>.instance() instead"
-);

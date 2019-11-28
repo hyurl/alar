@@ -1,14 +1,16 @@
 import * as os from "os";
 import * as path from "path";
 import startsWith = require("lodash/startsWith");
-import { ThenableAsyncGenerator, ThenableGenerator } from 'thenable-generator';
-import * as util from "check-iterable";
+import { ThenableAsyncGenerator } from 'thenable-generator';
+import { isAsyncGenerator, isGenerator } from "check-iterable";
+import { ModuleProxyBase } from '.';
 
 const WinPipe = "\\\\?\\pipe\\";
 
 export const local = Symbol("local");
 export const remotized = Symbol("remotized");
 export const noLocal = Symbol("noLocal");
+export const RpcState = Symbol("RpcState");
 
 export function absPath(filename: string, withPipe?: boolean): string {
     // resolve path to be absolute
@@ -59,7 +61,7 @@ export function mergeFnProperties(fn: Function, origin: Function) {
     set(fn, "name", origin.name);
     set(fn, "length", origin.length);
     set(fn, "toString", function toString() {
-        return Function.prototype.toString.call(origin);
+        return "[ModuleProxy] " + Function.prototype.toString.call(origin);
     }, true);
 
     return fn;
@@ -101,7 +103,7 @@ export function createLocalInstance(mod: ModuleProxy<any>) {
             ) {
                 let origin: Function = ins[prop];
 
-                set(ins, prop, mergeFnProperties(generable(origin), origin), true);
+                set(ins, prop, mergeFnProperties(wrap(origin), origin), true);
             }
 
             return ins[prop];
@@ -109,20 +111,53 @@ export function createLocalInstance(mod: ModuleProxy<any>) {
     });
 }
 
-function generable(origin: Function) {
+function wrap(origin: Function) {
     return function (this: any, ...args: any[]) {
         try {
             let res = origin.apply(this, args);
 
-            if (res && util.isAsyncGenerator(res)) {
-                return new ThenableAsyncGenerator(res);
-            } else if (res && util.isGenerator(res)) {
-                return new ThenableGenerator(res);
-            } else {
-                return res;
+            if (res) {
+                if (isAsyncGenerator(res) || isGenerator(res)) {
+                    return new ThenableAsyncGenerator(res);
+                } else if (typeof res["then"] === "function") {
+                    return res;
+                }
             }
+
+            return Promise.resolve(res);
         } catch (err) {
-            throw err;
+            return Promise.reject(err);
         }
     };
+}
+
+export function humanizeDuration(duration: number): string {
+    let num: number;
+    let unit: string;
+
+    if (duration < 1000) {
+        num = duration;
+        unit = "millisecond";
+    } else if (duration < 60000) {
+        num = Math.round(duration / 1000);
+        unit = "second";
+    } else {
+        num = Math.round(duration / 60000);
+        unit = "minute";
+    }
+
+    if (num !== 1)
+        unit += "s";
+
+    return num + " " + unit;
+}
+
+export async function tryLifeCycleFunction(
+    mod: ModuleProxyBase,
+    fn: "init" | "destroy"
+) {
+    if (RpcState in mod &&
+        typeof mod.instance(local, true)[fn] === "function") {
+        await mod.instance(local, true)[fn]();
+    }
 }

@@ -6,7 +6,7 @@ import { exponential, Backoff } from "backoff";
 import isSocketResetError = require('is-socket-reset-error');
 import { ThenableAsyncGenerator, ThenableAsyncGeneratorLike } from 'thenable-generator';
 import { RpcChannel, RpcEvents, RpcOptions, Response, Request } from "./channel";
-import { remotized, createRemoteInstance } from "../util";
+import { remotized, createRemoteInstance, humanizeDuration } from "../util";
 
 type Subscriber = (data: any) => void | Promise<void>;
 type ChannelState = "initiated" | "connecting" | "connected" | "closed";
@@ -178,7 +178,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
         });
     }
 
-    register<T>(mod: ModuleProxy<T>): this {
+    async register<T>(mod: ModuleProxy<T>) {
         this.registry[mod.name] = mod;
 
         mod[remotized] = true;
@@ -431,15 +431,13 @@ class ThenableIteratorProxy implements ThenableAsyncGeneratorLike {
 
     protected createTimeout() {
         return setTimeout(() => {
-            let num = Math.round(this.client.timeout / 1000);
-            let unit = num === 1 ? "second" : "seconds";
-
             if (this.queue.length > 0) {
                 let task = this.queue.shift();
                 let callee = `${this.modname}->${this.method}()`;
+                let duration = humanizeDuration(this.client.timeout);
 
                 task.reject(new Error(
-                    `Request to ${callee} timeout after ${num} ${unit}`
+                    `Request to ${callee} timeout after ${duration}`
                 ));
             }
 

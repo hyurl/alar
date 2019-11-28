@@ -41,6 +41,9 @@ The interface has the following properties and methods:
 **`protected` or `private` in any service class that may potentially served**
 **remotely.**
 
+**CHANGE: Since v5.0, every method referenced by `instance()` is wrapped**
+**asynchronous, regardless of local call or remote call.**
+
 ## ModuleConstructor
 
 This interface will be globalized as well, it indicates the very class 
@@ -193,13 +196,16 @@ The following properties and methods work in both implementations:
 - `open(): Promise<this>` Opens the channel. This method is internally called by
     `ModuleProxy.serve()` and `ModuleProxy.connect()`, you don't have to call it.
 - `close(): Promise<this>` Closes the channel.
-- `register<T>(mod: ModuleProxy<T>): this` Registers a module proxy to the 
-    channel.
+- `register<T>(mod: ModuleProxy<T>): Promise<this>` Registers a module proxy to
+    the channel.
 - `onError(handler: (err: Error) => void)` Binds an error handler invoked 
     whenever an error occurred in asynchronous operations which can't be caught
     during run-time.
 - `RpcChannel.registerError(ctor: new (...args: any) => Error)` Registers a new 
     type of error so that the channel can transmit it.
+
+**CHANGE: Since v5.0, `register()` returns a Promise, in order to support**
+**life cycle functions.**
 
 ## RpcServer
 
