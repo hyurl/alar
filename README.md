@@ -323,8 +323,11 @@ an `init()` method, it will be used to perform asynchronous initiation, for
 example, connecting to a database. And if it contains a `destroy()` method, it
 will be use to perform asynchronous destruction, to release resources.
 
-Both these methods will only work when the service is registered to the
-RpcServer, and will still work after hot-reloaded the module. However, there
+To enable this feature, after all needed modules are registered (and any other
+preparations are done), call the `RpcServer.init()` method to perform
+initiation processes for every registered modules.
+
+This features will still work after hot-reloaded the module. However, there
 would be a slight downtime when hot-reloading the module, and any call would
 fail until the module is re-available again.
 
@@ -347,6 +350,10 @@ export default class User {
         // ...
     }
 }
+
+server.register(app.services.user);
+
+await server.init();
 ```
 
 For more details, please check the [API documentation](./api.md).

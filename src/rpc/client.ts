@@ -178,7 +178,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
         });
     }
 
-    async register<T>(mod: ModuleProxy<T>) {
+    register<T>(mod: ModuleProxy<T>) {
         this.registry[mod.name] = mod;
 
         mod[remotized] = true;

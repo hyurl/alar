@@ -85,25 +85,30 @@ export class RpcServer extends RpcChannel {
         for (let name in this.registry) {
             let mod = <ModuleProxy<any> & ModuleProxyBase>this.registry[name];
 
-            mod[RpcState] = 2;
-
-            if (mod["singletons"][mod.name]) {
+            if (mod[RpcState] && mod["singletons"][mod.name]) {
+                mod[RpcState] = 2;
                 await tryLifeCycleFunction(mod, "destroy");
+                mod[RpcState] = 0;
             }
-
-            mod[RpcState] = 0;
         }
 
         return this;
     }
 
-    async register<T>(mod: ModuleProxy<T>) {
+    register<T>(mod: ModuleProxy<T>) {
         this.registry[mod.name] = mod;
-        mod[RpcState] = 0;
-        await tryLifeCycleFunction(<ModuleProxyBase>mod, "init");
-        mod[RpcState] = 1;
-
         return this;
+    }
+
+    /** Performs initiation processes for registered modules. */
+    async init() {
+        for (let name in this.registry) {
+            let mod = <ModuleProxy<any> & ModuleProxyBase>this.registry[name];
+
+            mod[RpcState] = 0;
+            await tryLifeCycleFunction(mod, "init");
+            mod[RpcState] = 1;
+        }
     }
 
     /**

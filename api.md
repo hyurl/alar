@@ -196,16 +196,13 @@ The following properties and methods work in both implementations:
 - `open(): Promise<this>` Opens the channel. This method is internally called by
     `ModuleProxy.serve()` and `ModuleProxy.connect()`, you don't have to call it.
 - `close(): Promise<this>` Closes the channel.
-- `register<T>(mod: ModuleProxy<T>): Promise<this>` Registers a module proxy to
+- `register<T>(mod: ModuleProxy<T>): this` Registers a module proxy to
     the channel.
 - `onError(handler: (err: Error) => void)` Binds an error handler invoked 
     whenever an error occurred in asynchronous operations which can't be caught
     during run-time.
 - `RpcChannel.registerError(ctor: new (...args: any) => Error)` Registers a new 
     type of error so that the channel can transmit it.
-
-**CHANGE: Since v5.0, `register()` returns a Promise, in order to support**
-**life cycle functions.**
 
 ## RpcServer
 
@@ -215,6 +212,7 @@ class RpcServer extends RpcChannel { }
 
 The server implementation of the RPC channel.
 
+- `init(): Promise<void>` Performs initiation processes for registered modules.
 - `publish(event: string, data: any, clients?: string[]): boolean` Publishes 
     data to the corresponding event, if `clients` are provided, the event will 
     only be emitted to them.
