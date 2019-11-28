@@ -103,7 +103,10 @@ export function createLocalInstance(mod: ModuleProxy<any>) {
             ) {
                 let origin: Function = ins[prop];
 
-                set(ins, prop, mergeFnProperties(wrap(origin), origin), true);
+                set(ins,
+                    prop,
+                    mergeFnProperties(asynchronize(origin, ins), origin),
+                    true);
             }
 
             return ins[prop];
@@ -111,10 +114,10 @@ export function createLocalInstance(mod: ModuleProxy<any>) {
     });
 }
 
-function wrap(origin: Function) {
-    return function (this: any, ...args: any[]) {
+function asynchronize(origin: Function, thisArg: any) {
+    return function (...args: any[]) {
         try {
-            let res = origin.apply(this, args);
+            let res = origin.apply(thisArg, args);
 
             if (res) {
                 if (isAsyncGenerator(res) || isGenerator(res)) {
