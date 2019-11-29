@@ -39,6 +39,10 @@ The interface has the following properties and methods:
 **CHANGE: Since v5.0, every method referenced by `instance()` is wrapped**
 **asynchronous, regardless of local call or remote call.**
 
+**CHANGE: Since v5.0, a module class with parameters must use the signature**
+**`ModuleProxy<typeof T>` in order to provide correct type check for**
+**`create()` function.**
+
 ## ModuleConstructor
 
 This interface will be globalized as well, it indicates the very class 

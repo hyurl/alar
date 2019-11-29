@@ -76,8 +76,8 @@ export default class Bootstrap {
 declare global {
     namespace app {
         namespace service {
-            // Since class User takes a parameter, passing `typeof User` will
-            // provide more accurate type hint for `create()` method.
+            // Since v5.0, a module class with parameters must use the signature
+            // `typeof T`.
             const user: ModuleProxy<typeof User>
         }
     }
