@@ -1,5 +1,6 @@
 import { register } from "err2obj";
-import { absPath } from '../util';
+import { absPath, getCodecOptions } from '../util';
+import { BSP } from "bsp";
 
 export interface RpcOptions {
     [x: string]: any;
@@ -8,6 +9,7 @@ export interface RpcOptions {
     path?: string;
     secret?: string;
     id?: string;
+    codec?: "JSON" | "BSON" | "FRON"
 }
 
 export type Request = [number, number | string, string?, string?, ...any[]];
@@ -30,6 +32,8 @@ export abstract class RpcChannel implements RpcOptions {
     readonly port: number = 9000;
     readonly path: string = "";
     readonly secret?: string;
+    readonly codec: RpcOptions["codec"];
+    protected bsp: BSP;
     protected errorHandler: (err: Error) => void;
 
     constructor(path: string);
@@ -43,6 +47,9 @@ export abstract class RpcChannel implements RpcOptions {
         } else {
             this.path = absPath(options);
         }
+
+        this.codec || (this.codec = "JSON");
+        this.bsp = new BSP(getCodecOptions(this.codec));
     }
 
     /** Gets the data source name according to the configuration. */

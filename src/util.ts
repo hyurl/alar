@@ -4,6 +4,7 @@ import startsWith = require("lodash/startsWith");
 import { ThenableAsyncGenerator } from 'thenable-generator';
 import { isAsyncGenerator, isGenerator } from "check-iterable";
 import { ModuleProxyBase } from '.';
+import { BSP } from "bsp";
 
 const WinPipe = "\\\\?\\pipe\\";
 
@@ -162,5 +163,62 @@ export async function tryLifeCycleFunction(
     if (RpcState in mod &&
         typeof mod.instance(local, true)[fn] === "function") {
         await mod.instance(local, true)[fn]();
+    }
+}
+
+export function getCodecOptions(
+    codec: "JSON" | "BSON" | "FRON"
+): ConstructorParameters<typeof BSP>[0] {
+    switch (codec) {
+        case "JSON":
+            return {
+                objectSerializer: JSON.stringify,
+                objectDeserializer: JSON.parse
+            };
+
+        case "FRON": {
+            let FRON: JSON = require("fron");
+
+            return {
+                objectSerializer: FRON.stringify,
+                objectDeserializer: FRON.parse
+            };
+        }
+
+        case "BSON": {
+            let BSON: { serialize: Function, deserialize: Function };
+
+            try {
+                let BSONType = require("bson-ext");
+                BSON = new BSONType([
+                    BSONType.Binary,
+                    BSONType.Code,
+                    BSONType.DBRef,
+                    BSONType.Decimal128,
+                    BSONType.Double,
+                    BSONType.Int32,
+                    BSONType.Long,
+                    BSONType.Map,
+                    BSONType.MaxKey,
+                    BSONType.MinKey,
+                    BSONType.ObjectId,
+                    BSONType.BSONRegExp,
+                    BSONType.Symbol,
+                    BSONType.Timestamp
+                ]);
+            } catch (e) {
+                try {
+                    BSON = require("bson");
+                } catch (e) {
+                    throw new Error("Cannot find module 'bson' or 'bson-ext'");
+                }
+            }
+
+            return {
+                objectSerializer: BSON.serialize.bind(BSON),
+                objectDeserializer: BSON.deserialize.bind(BSON),
+                serializationStyle: "buffer"
+            };
+        }
     }
 }

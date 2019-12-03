@@ -2,7 +2,6 @@ import * as net from "net";
 import * as path from "path";
 import * as fs from "fs-extra";
 import { err2obj } from "err2obj";
-import { wrap } from "bsp";
 import { BiMap } from "advanced-collections";
 import { isIteratorLike } from "check-iterable";
 import { source, ThenableAsyncGenerator } from "thenable-generator";
@@ -153,7 +152,7 @@ export class RpcServer extends RpcChannel {
             socket.destroy(new Error("Handshake required"));
         }, 1000);
 
-        wrap(socket).on("error", err => {
+        this.bsp.wrap(socket).on("error", err => {
             // When any error occurs, if it's a socket reset error, e.g.
             // client disconnected unexpected, the server could just 
             // ignore the error. For other errors, the server should 
@@ -179,6 +178,15 @@ export class RpcServer extends RpcChannel {
                 } else {
                     return socket.destroy(new Error("Connection unauthorized"));
                 }
+            }
+
+            if (this.codec === "BSON" && typeof msg === "object") {
+                // BSON doesn't support top level array, they will be
+                // transferred as an plain object with numeric keys, should
+                // fix it before handling the request.
+                msg = <any>Array.from(Object.assign(<any>msg, {
+                    length: Object.keys(msg).length
+                }));
             }
 
             if (Array.isArray(msg)) {

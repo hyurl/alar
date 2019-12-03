@@ -739,4 +739,34 @@ describe("Alar ModuleProxy", () => {
 
         watcher.close();
     });
+
+    it("should serve an RPC service using BSON codec as expected", async () => {
+        let server = await App.serve({ ...config, codec: "BSON" });
+
+        server.register(app.service.user);
+
+        let client = await App.connect({ ...config, codec: "BSON" });
+
+        client.register(app.service.user);
+
+        assert.strictEqual(await app.service.user.instance().getName(), "Mr. World Budy");
+
+        await client.close();
+        await server.close();
+    });
+
+    it("should serve an RPC service using FRON codec as expected", async () => {
+        let server = await App.serve({ ...config, codec: "FRON" });
+
+        server.register(app.service.user);
+
+        let client = await App.connect({ ...config, codec: "FRON" });
+
+        client.register(app.service.user);
+
+        assert.strictEqual(await app.service.user.instance().getName(), "Mr. World Budy");
+
+        await client.close();
+        await server.close();
+    });
 });

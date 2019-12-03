@@ -1,7 +1,6 @@
 import * as net from "net";
 import sequid from "sequid";
 import { obj2err, err2obj } from 'err2obj';
-import { wrap } from 'bsp';
 import { exponential, Backoff } from "backoff";
 import isSocketResetError = require('is-socket-reset-error');
 import { ThenableAsyncGenerator, ThenableAsyncGeneratorLike } from 'thenable-generator';
@@ -155,7 +154,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
                 );
             }
 
-            this.socket = wrap(this.socket);
+            this.socket = this.bsp.wrap(this.socket);
             this.socket.once("error", errorListener);
         });
     }
@@ -293,7 +292,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
                 // open, pause the service immediately and try to reconnect.
                 this.state = "connecting"; // MUST DO
                 this.pause();
-                this.reconConter.backoff();
+                this.reconConter && this.reconConter.backoff();
             }
         }).on("data", async (msg: Response) => {
             this.lastActiveTime = Date.now();
@@ -301,6 +300,15 @@ export class RpcClient extends RpcChannel implements ClientOptions {
             if (this.selfDestruction) {
                 clearTimeout(this.selfDestruction);
                 this.selfDestruction = null;
+            }
+
+            if (this.codec === "BSON") {
+                // BSON doesn't support top level array, they will be
+                // transferred as an plain object with numeric keys, should
+                // fix it before handling the response.
+                msg = <any>Array.from(Object.assign(<any>msg, {
+                    length: Object.keys(msg).length
+                }));
             }
 
             let [event, taskId, data] = msg;

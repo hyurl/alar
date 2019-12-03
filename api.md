@@ -162,6 +162,7 @@ interface RpcOptions {
     path?: string;
     secret?: string;
     id?: string;
+    codec?: "JSON" | "BSON" | "FRON"
 }
 ```
 
@@ -177,6 +178,12 @@ The `id` property is of ambiguity. On the server side, if omitted, it will fall
 back to `dsn`, used for the client routing requests. On the client side, if
 omitted, a random string will be generated, used for the server publishing
 events.
+
+The `codec` property sets in what format should the data be transferred, if set
+`BSON` or `FRON`, the corresponding package must be installed.
+
+- BSON: [bson](https://github.com/mongodb/js-bson) or [bson-ext](https://github.com/mongodb-js/bson-ext);
+- FRON: [fron](https://github.com/hyurl/fron)
 
 ## RpcChannel
 
