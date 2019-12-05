@@ -5,6 +5,7 @@ import { ThenableAsyncGenerator } from 'thenable-generator';
 import { isAsyncGenerator, isGenerator } from "check-iterable";
 import { ModuleProxyBase } from '.';
 import { BSP } from "bsp";
+import decircularize = require("decircularize");
 
 const WinPipe = "\\\\?\\pipe\\";
 
@@ -220,5 +221,66 @@ export function getCodecOptions(
                 serializationStyle: "buffer"
             };
         }
+    }
+}
+
+export function serializable(data: any) {
+    let type = typeof data;
+
+    if (type === "bigint") {
+        return Number(data);
+    } else if (type === "function" || type === "symbol") {
+        return String(data);
+    } else if (data !== null && type === "object") {
+        data = decircularize(data);
+
+        if (data instanceof Map) {
+            let map = new Map();
+
+            for (let [key, value] of data) {
+                key = serializable(key);
+
+                // Skip the items that the key resolves to void.
+                if (key !== undefined) {
+                    map.set(key, serializable(value));
+                }
+            }
+
+            return [...map];
+        } else if (data instanceof Set) {
+            let set = new Set();
+
+            for (let value of data) {
+                set.add(serializable(value));
+            }
+
+            return [...set];
+        } else if (Array.isArray(data)) {
+            let arr = [];
+
+            for (let i = 0; i < data.length; ++i) {
+                arr.push(serializable(data[i]));
+            }
+
+            return arr;
+        } else {
+            for (let key in data) {
+                // Only care about own properties.
+                if (data.hasOwnProperty(key)) {
+                    let value = serializable(data[key]);
+
+                    // If the value resolved to void, simply delete the property.
+                    if (value === undefined) {
+                        delete data[key];
+                    } else {
+                        data[key] = value;
+                    }
+                }
+            }
+
+            return data;
+        }
+    } else {
+        return data;
     }
 }

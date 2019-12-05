@@ -1,5 +1,4 @@
 import hash = require("string-hash");
-import objectHash = require("object-hash");
 import { sep, normalize, dirname, basename, extname } from "path";
 import { applyMagic } from "js-magic";
 import { ModuleLoader } from './index';
@@ -8,6 +7,7 @@ import { readdirSync } from 'fs';
 import cloneDeep = require("lodash/cloneDeep");
 import merge = require("lodash/merge");
 import {
+    serializable,
     createLocalInstance,
     local,
     remotized,
@@ -124,7 +124,8 @@ export class ModuleProxyBase<T = any> extends Injectable implements ModuleProxy<
         } else if (keys.length) {
             // If the module is connected to one or more remote instances,
             // redirect traffic to one of them automatically.
-            let id = keys[hash(objectHash(route)) % keys.length];
+            let num = hash(JSON.stringify(serializable(route)));
+            let id = keys[num % keys.length];
             return this.remoteSingletons[id];
         } else {
             throw new ReferenceError(`Service ${this.name} is not available`);
