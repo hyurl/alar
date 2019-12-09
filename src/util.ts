@@ -264,21 +264,21 @@ export function serializable(data: any) {
 
             return arr;
         } else {
+            let obj = {};
+
             for (let key in data) {
                 // Only care about own properties.
                 if (data.hasOwnProperty(key)) {
                     let value = serializable(data[key]);
 
                     // If the value resolved to void, simply delete the property.
-                    if (value === undefined) {
-                        delete data[key];
-                    } else {
-                        data[key] = value;
+                    if (value !== undefined) {
+                        obj[key] = value;
                     }
                 }
             }
 
-            return data;
+            return obj;
         }
     } else {
         return data;
