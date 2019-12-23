@@ -1,4 +1,3 @@
-import { register } from "err2obj";
 import { absPath, getCodecOptions } from '../util';
 import { BSP } from "bsp";
 
@@ -9,7 +8,7 @@ export interface RpcOptions {
     path?: string;
     secret?: string;
     id?: string;
-    codec?: "JSON" | "BSON" | "FRON"
+    codec?: "CLONE" | "JSON" | "BSON" | "FRON"
 }
 
 export type Request = [number, number | string, string?, string?, ...any[]];
@@ -48,7 +47,7 @@ export abstract class RpcChannel implements RpcOptions {
             this.path = absPath(options);
         }
 
-        this.codec || (this.codec = "JSON");
+        this.codec || (this.codec = "CLONE");
         this.bsp = new BSP(getCodecOptions(this.codec));
     }
 
@@ -76,9 +75,13 @@ export abstract class RpcChannel implements RpcOptions {
         this.errorHandler = handler;
     }
 
-    /** Registers a new type of error so that the channel can transmit it. */
+    /**
+     * Registers a new type of error so that the channel can transmit it.
+     * @deprecated Simply just add the error constructor to the global scope
+     *  will do fine.
+     */
     static registerError(ctor: new (...args: any) => Error) {
-        register(ctor);
+        global[ctor.name] = ctor;
     }
 
     /** Opens the channel. */

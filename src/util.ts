@@ -5,7 +5,7 @@ import { ThenableAsyncGenerator } from 'thenable-generator';
 import { isAsyncGenerator, isGenerator } from "check-iterable";
 import { ModuleProxyBase } from '.';
 import { BSP } from "bsp";
-import decircularize = require("decircularize");
+import { clone, declone } from "@hyurl/structured-clone";
 
 const WinPipe = "\\\\?\\pipe\\";
 
@@ -168,13 +168,19 @@ export async function tryLifeCycleFunction(
 }
 
 export function getCodecOptions(
-    codec: "JSON" | "BSON" | "FRON"
+    codec: "JSON" | "CLONE" | "BSON" | "FRON"
 ): ConstructorParameters<typeof BSP>[0] {
     switch (codec) {
         case "JSON":
             return {
                 objectSerializer: JSON.stringify,
                 objectDeserializer: JSON.parse
+            };
+
+        case "CLONE":
+            return {
+                objectSerializer: (data: any) => JSON.stringify(clone(data)),
+                objectDeserializer: (data: string) => declone(JSON.parse(data))
             };
 
         case "FRON": {
@@ -221,66 +227,5 @@ export function getCodecOptions(
                 serializationStyle: "buffer"
             };
         }
-    }
-}
-
-export function serializable(data: any) {
-    let type = typeof data;
-
-    if (type === "bigint") {
-        return Number(data);
-    } else if (type === "function" || type === "symbol") {
-        return String(data);
-    } else if (data !== null && type === "object") {
-        data = decircularize(data);
-
-        if (data instanceof Map) {
-            let map = new Map();
-
-            for (let [key, value] of data) {
-                key = serializable(key);
-
-                // Skip the items that the key resolves to void.
-                if (key !== undefined) {
-                    map.set(key, serializable(value));
-                }
-            }
-
-            return [...map];
-        } else if (data instanceof Set) {
-            let set = new Set();
-
-            for (let value of data) {
-                set.add(serializable(value));
-            }
-
-            return [...set];
-        } else if (Array.isArray(data)) {
-            let arr = [];
-
-            for (let i = 0; i < data.length; ++i) {
-                arr.push(serializable(data[i]));
-            }
-
-            return arr;
-        } else {
-            let obj = {};
-
-            for (let key in data) {
-                // Only care about own properties.
-                if (data.hasOwnProperty(key)) {
-                    let value = serializable(data[key]);
-
-                    // If the value resolved to void, simply delete the property.
-                    if (value !== undefined) {
-                        obj[key] = value;
-                    }
-                }
-            }
-
-            return obj;
-        }
-    } else {
-        return data;
     }
 }

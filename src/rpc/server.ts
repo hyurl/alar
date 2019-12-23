@@ -1,7 +1,7 @@
 import * as net from "net";
 import * as path from "path";
 import * as fs from "fs-extra";
-import { err2obj } from "err2obj";
+import { clone } from '@hyurl/structured-clone';
 import { BiMap } from "advanced-collections";
 import { isIteratorLike } from "check-iterable";
 import { source, ThenableAsyncGenerator } from "thenable-generator";
@@ -141,9 +141,14 @@ export class RpcServer extends RpcChannel {
         return clients;
     }
 
-    protected dispatch(socket: net.Socket, ...data: any[]) {
+    protected dispatch(socket: net.Socket, event: RpcEvents, ...data: any[]) {
         if (!socket.destroyed && socket.writable) {
-            socket.write(<any>data);
+            if (event === RpcEvents.THROW) {
+                // Use structured clone algorithm to process error.
+                data = clone(data);
+            }
+
+            socket.write(<any>[event, ...data]);
         }
     }
 
@@ -226,7 +231,7 @@ export class RpcServer extends RpcChannel {
                                 }
                             } catch (err) {
                                 event = RpcEvents.THROW;
-                                data = err2obj(err);
+                                data = err;
                             }
 
                             // Send response or error to the client.
@@ -269,7 +274,7 @@ export class RpcServer extends RpcChannel {
                                 data.done && (delete tasks[taskId]);
                             } catch (err) {
                                 event = RpcEvents.THROW;
-                                data = err2obj(err);
+                                data = err;
                                 task && (delete tasks[taskId]);
                             }
 

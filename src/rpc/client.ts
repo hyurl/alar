@@ -1,7 +1,7 @@
 import * as net from "net";
 import sequid from "sequid";
-import { obj2err, err2obj } from 'err2obj';
 import { exponential, Backoff } from "backoff";
+import { declone } from "@hyurl/structured-clone";
 import isSocketResetError = require('is-socket-reset-error');
 import { ThenableAsyncGenerator, ThenableAsyncGeneratorLike } from 'thenable-generator';
 import { RpcChannel, RpcEvents, RpcOptions, Response, Request } from "./channel";
@@ -344,7 +344,10 @@ export class RpcClient extends RpcChannel implements ClientOptions {
                 // to the client.
                 case RpcEvents.THROW:
                     if (task = this.tasks[taskId]) {
-                        task.reject(obj2err(data));
+                        // Codec 'CLONE' uses declone internally, but for
+                        // other codecs, declone must be explicit.
+                        (this.codec !== "CLONE") && (data = declone(data));
+                        task.reject(data);
                     }
                     break;
             }
@@ -391,7 +394,7 @@ class ThenableIteratorProxy implements ThenableAsyncGeneratorLike {
     }
 
     throw(err?: Error) {
-        return this.invokeTask(RpcEvents.THROW, err2obj(err)) as Promise<never>;
+        return this.invokeTask(RpcEvents.THROW, err) as Promise<never>;
     }
 
     then(resolver: (data: any) => any, rejecter: (err: any) => any) {
@@ -511,7 +514,7 @@ class ThenableIteratorProxy implements ThenableAsyncGeneratorLike {
                     return Promise.resolve({ value: args[0], done: true });
 
                 case RpcEvents.THROW:
-                    return Promise.reject(obj2err(args[0]));
+                    return Promise.reject(args[0]);
             }
         } else {
             if (this.status === "uninitiated" && event !== RpcEvents.INVOKE) {

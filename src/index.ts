@@ -79,22 +79,35 @@ export class ModuleProxy extends ModuleProxyBase {
         ) => {
             let name = this.resolve(filename);
 
-            if (name && this.singletons[name]) {
-                try {
-                    if (this[RpcState]) {
-                        this[RpcState] = 2;
-                        await tryLifeCycleFunction(this, "destroy");
-                    }
+            if (name) {
+                if (this.singletons[name]) {
+                    let unloaded = false;
+                    let tryUnload = () => {
+                        if (!unloaded) {
+                            delete this.singletons[name];
+                            this.loader.unload(filename);
+                            unloaded = true;
+                        }
+                    };
 
-                    delete this.singletons[name];
+                    try {
+                        if (this[RpcState]) {
+                            this[RpcState] = 2;
+                            await tryLifeCycleFunction(this, "destroy");
+                        }
+
+                        tryUnload();
+
+                        if (this[RpcState]) {
+                            await tryLifeCycleFunction(this, "init");
+                            this[RpcState] = 1;
+                        }
+                    } catch (err) {
+                        console.error(err);
+                        tryUnload();
+                    }
+                } else {
                     this.loader.unload(filename);
-
-                    if (this[RpcState]) {
-                        await tryLifeCycleFunction(this, "init");
-                        this[RpcState] = 1;
-                    }
-                } catch (err) {
-                    console.error(err);
                 }
 
                 cb && cb(event, filename);

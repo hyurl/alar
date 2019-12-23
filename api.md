@@ -162,7 +162,7 @@ interface RpcOptions {
     path?: string;
     secret?: string;
     id?: string;
-    codec?: "JSON" | "BSON" | "FRON"
+    codec?: "CLONE" | "JSON" | "BSON" | "FRON"
 }
 ```
 
@@ -179,8 +179,13 @@ back to `dsn`, used for the client routing requests. On the client side, if
 omitted, a random string will be generated, used for the server publishing
 events.
 
-The `codec` property sets in what format should the data be transferred, if set
-`BSON` or `FRON`, the corresponding package must be installed.
+The `codec` property sets in what format should the data be transferred. Since
+v5.2, Alar uses a new codec `CLONE` by default, it's based on `JSON` however
+with structured clone of the original data, that means it supports more types
+than JSON do, like Date, RegExp, TypedArray etc. For more information, see
+[@hyurl/structured-clone](https://github.com/hyurl/structured-clone).
+
+If set `BSON` or `FRON`, the following corresponding packages must be installed.
 
 - BSON: [bson](https://github.com/mongodb/js-bson) or [bson-ext](https://github.com/mongodb-js/bson-ext);
 - FRON: [fron](https://github.com/hyurl/fron)

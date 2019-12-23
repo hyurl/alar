@@ -1,6 +1,6 @@
 {
   "name": "alar",
-  "version": "5.1.4",
+  "version": "5.2.0",
   "description": "Auto-Load And Remote.",
   "main": "dist/index.js",
   "types": "src/index.ts",
@@ -34,6 +34,7 @@
   },
   "homepage": "https://github.com/hyurl/alar#readme",
   "dependencies": {
+    "@hyurl/structured-clone": "^0.1.2",
     "@types/backoff": "^2.5.1",
     "@types/fs-extra": "^8.0.1",
     "advanced-collections": "^0.1.2",
@@ -41,8 +42,6 @@
     "bsp": "^1.2.0",
     "check-iterable": "^1.0.2",
     "chokidar": "^3.3.0",
-    "decircularize": "^1.0.0",
-    "err2obj": "^1.1.0",
     "fs-extra": "^8.1.0",
     "is-socket-reset-error": "^0.1.1",
     "js-magic": "^1.0.0",
