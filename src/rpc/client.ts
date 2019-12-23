@@ -29,8 +29,8 @@ export class RpcClient extends RpcChannel implements ClientOptions {
     protected socket: net.Socket = null;
     protected registry: { [name: string]: ModuleProxy<any> } = {};
     protected taskId = sequid(0, true);
-    protected tasks: { [taskId: number]: Task; } = {};
-    protected events: { [name: string]: Subscriber[] } = {};
+    protected tasks = new Map<number, Task>();
+    protected events = new Map<string, Set<Subscriber>>();
     protected finishConnect: Function = null;
     private lastActiveTime: number = Date.now();
     protected selfDestruction: NodeJS.Timer = null;
@@ -229,12 +229,13 @@ export class RpcClient extends RpcChannel implements ClientOptions {
 
     /** Subscribes a listener function to the corresponding event. */
     subscribe(event: string, listener: Subscriber) {
-        if (!this.events[event]) {
-            this.events[event] = [];
+        let listeners = this.events.get(event);
+
+        if (!listeners) {
+            this.events.set(event, listeners = new Set());
         }
 
-        this.events[event].push(listener);
-
+        listeners.add(listener);
         return this;
     }
 
@@ -243,12 +244,15 @@ export class RpcClient extends RpcChannel implements ClientOptions {
      */
     unsubscribe(event: string, listener?: Subscriber) {
         if (!listener) {
-            return this.events[event] ? (delete this.events[event]) : false;
-        } else if (this.events[event]) {
-            let i = this.events[event].indexOf(listener);
-            return this.events[event].splice(i, 1).length > 0;
+            return this.events.delete(event);
         } else {
-            return false;
+            let listeners = this.events.get(event);
+
+            if (listeners) {
+                return listeners.delete(listener);
+            } else {
+                return false;
+            }
         }
     }
 
@@ -323,10 +327,12 @@ export class RpcClient extends RpcChannel implements ClientOptions {
                 case RpcEvents.BROADCAST:
                     // If receives the broadcast event, call all the 
                     // listeners bound to the corresponding event. 
-                    let listeners = this.events[taskId] || [];
+                    let listeners = this.events.get(<string>taskId);
 
-                    for (let handle of listeners) {
-                        await handle(data);
+                    if (listeners) {
+                        for (let handle of listeners) {
+                            await handle(data);
+                        }
                     }
                     break;
 
@@ -335,7 +341,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
                 case RpcEvents.INVOKE:
                 case RpcEvents.YIELD:
                 case RpcEvents.RETURN:
-                    if (task = this.tasks[taskId]) {
+                    if (task = this.tasks.get(<number>taskId)) {
                         task.resolve(data);
                     }
                     break;
@@ -343,7 +349,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
                 // If any error occurs on the server, it will be delivered
                 // to the client.
                 case RpcEvents.THROW:
-                    if (task = this.tasks[taskId]) {
+                    if (task = this.tasks.get(<number>taskId)) {
                         // Codec 'CLONE' uses declone internally, but for
                         // other codecs, declone must be explicit.
                         (this.codec !== "CLONE") && (data = declone(data));
@@ -407,8 +413,8 @@ class ThenableIteratorProxy implements ThenableAsyncGeneratorLike {
 
             // With INVOKE event, the task will finish immediately after
             // awaiting the response, once a task is finished, it should be 
-            // removed from the list right away.
-            delete this.client["tasks"][this.taskId];
+            // removed from the queue right away.
+            this.client["tasks"].delete(this.taskId);
 
             return res;
         }).then(resolver, rejecter);
@@ -457,10 +463,10 @@ class ThenableIteratorProxy implements ThenableAsyncGeneratorLike {
     }
 
     protected prepareTask(event: RpcEvents, data?: any): Promise<any> {
-        let task: Task = this.client["tasks"][this.taskId];
+        let task = this.client["tasks"].get(this.taskId);
 
         if (!task) {
-            task = this.client["tasks"][this.taskId] = {
+            this.client["tasks"].set(this.taskId, task = {
                 resolve: (data: any) => {
                     if (this.status === "suspended") {
                         if (this.queue.length > 0) {
@@ -477,7 +483,7 @@ class ThenableIteratorProxy implements ThenableAsyncGeneratorLike {
                         this.close();
                     }
                 }
-            };
+            });
         }
 
         // Pack every request as Promise, and assign the resolver and rejecter 
@@ -548,14 +554,14 @@ class ThenableIteratorProxy implements ThenableAsyncGeneratorLike {
                     if (res.done) {
                         this.status = "closed";
                         this.result = res.value;
-                        delete this.client["tasks"][this.taskId];
+                        this.client["tasks"].delete(this.taskId);
                     }
                 }
 
                 return res;
             }).catch(err => {
                 this.status = "closed";
-                delete this.client["tasks"][this.taskId];
+                this.client["tasks"].delete(this.taskId);
 
                 throw err;
             });

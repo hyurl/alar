@@ -360,9 +360,11 @@ describe("Alar ModuleProxy", () => {
         client.unsubscribe("set-data", listner);
         client.unsubscribe("set-data-2");
 
-        assert.deepStrictEqual(client["events"], {
-            "set-data": [listner2]
-        });
+        assert(client["events"] instanceof Map);
+        assert(client["events"].size === 1);
+        assert(client["events"].get("set-data") instanceof Set);
+        assert(client["events"].get("set-data").size === 1);
+        assert(client["events"].get("set-data").has(listner2));
 
         await client.close();
         await server.close();

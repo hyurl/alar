@@ -18,9 +18,7 @@ export class RpcServer extends RpcChannel {
     protected server: net.Server;
     protected registry: { [name: string]: ModuleProxy<any> } = {};
     protected clients = new BiMap<string, net.Socket>();
-    protected suspendedTasks = new Map<net.Socket, {
-        [taskId: number]: ThenableAsyncGenerator;
-    }>();
+    protected suspendedTasks = new Map<net.Socket, Map<number, ThenableAsyncGenerator>>();
 
     constructor(path: string);
     constructor(port: number, host?: string);
@@ -166,14 +164,16 @@ export class RpcServer extends RpcChannel {
                 this.errorHandler(err);
             }
         }).on("close", () => {
-            this.clients.deleteValue(socket);
-
             let tasks = this.suspendedTasks.get(socket);
-            this.suspendedTasks.delete(socket);
 
-            // close all suspended tasks of the socket.
-            for (let id in tasks) {
-                tasks[id].return();
+            if (tasks) {
+                this.suspendedTasks.delete(socket);
+                this.clients.deleteValue(socket);
+
+                // close all suspended tasks of the socket.
+                for (let task of tasks.values()) {
+                    task.return();
+                }
             }
         }).on("data", async (msg: string | Request) => {
             if (this.secret && !socket[authorized]) {
@@ -201,7 +201,7 @@ export class RpcServer extends RpcChannel {
                     case RpcEvents.HANDSHAKE:
                         clearTimeout(autoDestroy);
                         this.clients.set(<string>taskId, socket);
-                        this.suspendedTasks.set(socket, {});
+                        this.suspendedTasks.set(socket, new Map());
                         // Send CONNECT event to notify the client that the 
                         // connection is finished.
                         this.dispatch(socket, RpcEvents.CONNECT, taskId, this.id);
@@ -214,7 +214,7 @@ export class RpcServer extends RpcChannel {
                     case RpcEvents.INVOKE:
                         {
                             let data: any;
-                            let tasks = this.suspendedTasks.get(socket) || {};
+                            let tasks = this.suspendedTasks.get(socket);
 
                             try {
                                 // Connect to the singleton instance and 
@@ -223,7 +223,7 @@ export class RpcServer extends RpcChannel {
                                 let task = ins[method].apply(ins, args);
 
                                 if (task && isIteratorLike(task[source])) {
-                                    tasks[taskId] = task;
+                                    tasks.set(<number>taskId, task);
                                     event = RpcEvents.INVOKE;
                                 } else {
                                     data = await task;
@@ -244,8 +244,8 @@ export class RpcServer extends RpcChannel {
                     case RpcEvents.THROW:
                         {
                             let data: any, input: any;
-                            let tasks = this.suspendedTasks.get(socket) || {};
-                            let task: ThenableAsyncGenerator = tasks[taskId];
+                            let tasks = this.suspendedTasks.get(socket);
+                            let task = tasks.get(<number>taskId);
 
                             try {
                                 if (!task) {
@@ -271,11 +271,11 @@ export class RpcServer extends RpcChannel {
                                     await task.throw(input);
                                 }
 
-                                data.done && (delete tasks[taskId]);
+                                data.done && tasks.delete(<number>taskId);
                             } catch (err) {
                                 event = RpcEvents.THROW;
                                 data = err;
-                                task && (delete tasks[taskId]);
+                                task && tasks.delete(<number>taskId);
                             }
 
                             this.dispatch(socket, event, taskId, data);
