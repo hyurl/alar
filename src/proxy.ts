@@ -7,6 +7,7 @@ import { readdirSync } from 'fs';
 import cloneDeep = require("lodash/cloneDeep");
 import merge = require("lodash/merge");
 import { clone } from "@hyurl/structured-clone";
+import couldBeClass from "could-be-class";
 import {
     createLocalInstance,
     local,
@@ -65,27 +66,37 @@ export class ModuleProxyBase<T = any> extends Injectable implements ModuleProxy<
     get proto(): EnsureInstanceType<T> {
         let { exports } = this;
 
-        if (typeof exports.default === "object")
-            return exports.default;
-        else if (typeof exports.default === "function")
-            return exports.default.prototype;
-        else if (typeof exports === "object")
+        if (typeof exports === "object") {
+            if (typeof exports.default === "object") {
+                return exports.default;
+            } else if (
+                typeof exports.default === "function" &&
+                couldBeClass(exports.default, true)
+            ) {
+                return exports.default.prototype;
+            }
+
             return exports;
-        else if (typeof exports === "function")
+        } else if (typeof exports === "function") {
             return exports.prototype;
-        else
+        } else {
             return null;
+        }
     }
 
     get ctor(): ModuleConstructor<EnsureInstanceType<T>> {
         let { exports } = this;
 
-        if (typeof exports.default === "function")
+        if (
+            typeof exports === "object" &&
+            couldBeClass(exports.default, true)
+        ) {
             return exports.default;
-        else if (typeof exports === "function")
+        } else if (typeof exports === "function") {
             return exports;
-        else
-            return null;
+        }
+
+        return null;
     }
 
     create(...args: any[]): EnsureInstanceType<T> {
