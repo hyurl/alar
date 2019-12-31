@@ -25,6 +25,9 @@ declare global {
     }
 
     interface ModuleProxy<T> {
+        (local: symbol): AsynchronizedFunctionProperties<EnsureInstanceType<T>> & Readonly<NonFunctionProperties<EnsureInstanceType<T>>>;
+        (route?: any): AsynchronizedFunctionProperties<EnsureInstanceType<T>> & Voidable<Readonly<NonFunctionProperties<EnsureInstanceType<T>>>>;
+
         /** The name (with namespace) of the module. */
         readonly name: string;
         /** The path (without extension) of the module. */

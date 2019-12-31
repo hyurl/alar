@@ -8,7 +8,7 @@ import { source, ThenableAsyncGenerator } from "thenable-generator";
 import isSocketResetError = require("is-socket-reset-error");
 import { RpcChannel, RpcEvents, Request, RpcOptions } from "./channel";
 import { absPath, local, RpcState, tryLifeCycleFunction } from "../util";
-import { ModuleProxyBase } from '..';
+import { ModuleProxy as ModuleProxyBase } from '../proxy';
 
 const authorized = Symbol("authorized");
 

@@ -1,6 +1,6 @@
 {
   "name": "alar",
-  "version": "5.3.1",
+  "version": "5.4.0",
   "description": "Auto-Load And Remote.",
   "main": "dist/index.js",
   "types": "src/index.ts",
@@ -45,7 +45,7 @@
     "could-be-class": "^0.1.4",
     "fs-extra": "^8.1.0",
     "is-socket-reset-error": "^0.1.1",
-    "js-magic": "^1.0.0",
+    "js-magic": "^1.1.1",
     "lodash": "^4.17.15",
     "sequid": "^1.0.1",
     "string-hash": "^1.1.3",

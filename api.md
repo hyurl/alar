@@ -43,6 +43,9 @@ The interface has the following properties and methods:
 **`ModuleProxy<typeof T>` in order to provide correct type check for**
 **`create()` function.**
 
+**CHANGE: Since v5.4, the module proxy now can be called as a function, and**
+**it acts just the same as calling `instance()` function.**
+
 ## ModuleConstructor
 
 This interface will be globalized as well, it indicates the very class 
@@ -59,19 +62,13 @@ interface ModuleConstructor<T> {
     `ModuleProxy<T>.instance()`, it will get the returning instance as the 
     singleton instead.
 
-## ModuleProxyBase
-
-```typescript
-class ModuleProxyBase<T = any> implements ModuleProxy<T> { }
-```
-
 This class is internally used to create chained module proxies.
 
 # ModuleProxy (class)
 
 ```typescript
-class ModuleProxy extends ModuleProxyBase {
-    constructor(name: string, path: string);
+class ModuleProxy {
+    constructor(name: string, path: string, loader?: ModuleLoader);
 }
 ```
 
@@ -113,6 +110,9 @@ This class has the following extra properties and methods:
 
 **NOTE: although `ModuleProxy` inherits from `ModuleProxyBase`, calling the**
 **methods like `create()`, `instance()` should be avoided.**
+
+**CHANGE: Since v5.4, class `ModuleProxy` now takes a third optional parameter**
+**to set the loader when instantiating.**
 
 ## ModuleLoader
 
@@ -251,9 +251,11 @@ connection.
 
 When the client detected the server is down or malfunction, it will destroy the
 connection positively and retry connect. Since v4.0.0, this feature uses an
-exponential back-off mechanism to retry connect rapidly util about 2 minutes
+exponential back-off mechanism to retry connect rapidly util about 30 minutes
 timeout before consider the server is down permanently, and will close the
 channel after that.
+
+**NOTE: prior to v5.4, reconnection tries timeout is 2 minutes.**
 
 ## RpcClient
 

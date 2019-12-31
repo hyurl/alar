@@ -101,6 +101,10 @@ import "./app";
 // The instance() method will link to the singleton instance of the module.
 app.bootstrap.instance().init();
 
+// Since v5.4, calling instance() is optional, you can call the module proxy
+// as function directly. So this is equivalent to the above one:
+app.bootstrap().init();
+
 // The create() method will create a new instance.
 var user = app.service.user.create("Mr. Handsome");
 

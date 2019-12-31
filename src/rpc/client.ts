@@ -35,7 +35,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
     private lastActiveTime: number = Date.now();
     protected selfDestruction: NodeJS.Timer = null;
     protected pingTimer: NodeJS.Timer = null;
-    private reconConter: Backoff = null;
+    private reconnect: Backoff = null;
 
     constructor(path: string);
     constructor(port: number, host?: string);
@@ -79,7 +79,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
                 this.finishConnect = () => {
                     this.state = "connected";
 
-                    if (this.pingTimer && this.reconConter) {
+                    if (this.pingTimer && this.reconnect) {
                         return resolve(this);
                     }
 
@@ -101,8 +101,8 @@ export class RpcClient extends RpcChannel implements ClientOptions {
                             this.send(RpcEvents.PING, this.id);
                         }
                     }, 5000);
-                    this.reconConter = exponential({
-                        maxDelay: 9600
+                    this.reconnect = exponential({
+                        maxDelay: 5000
                     }).on("ready", async (num) => {
                         // Retry connect in exponential timeout.
                         try {
@@ -110,10 +110,10 @@ export class RpcClient extends RpcChannel implements ClientOptions {
                         } catch (e) { }
 
                         if (this.connected) {
-                            this.reconConter.reset();
+                            this.reconnect.reset();
                             this.resume(); // resume service
-                        } else if (num === 18) {
-                            // If tried 18 times (about 2 minutes) and still
+                        } else if (num === 365) {
+                            // If tried 365 times (about 30 minutes) and still
                             // have no connection, then consider the server is
                             // down permanently and close the client. 
                             await this.close();
@@ -121,7 +121,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
                                 `Connection to ${this.serverId} lost permanently.`
                             );
                         } else {
-                            this.reconConter.backoff();
+                            this.reconnect.backoff();
                         }
                     });
 
@@ -164,7 +164,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
             clearInterval(this.pingTimer);
             clearTimeout(this.selfDestruction);
             this.state = "closed";
-            this.reconConter.reset();
+            this.reconnect.reset();
             this.pause();
 
             if (this.socket) {
@@ -296,7 +296,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
                 // open, pause the service immediately and try to reconnect.
                 this.state = "connecting"; // MUST DO
                 this.pause();
-                this.reconConter && this.reconConter.backoff();
+                this.reconnect && this.reconnect.backoff();
             }
         }).on("data", async (msg: Response) => {
             this.lastActiveTime = Date.now();

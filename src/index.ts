@@ -4,13 +4,12 @@ import startsWith = require("lodash/startsWith");
 import { RpcOptions, RpcChannel } from './rpc/channel';
 import { RpcClient, ClientOptions } from "./rpc/client";
 import { RpcServer } from "./rpc/server";
-import { ModuleProxyBase } from "./proxy";
-import { local, RpcState, tryLifeCycleFunction, set } from './util';
+import { ModuleProxy as ModuleProxyBase } from "./proxy";
+import { local, RpcState, tryLifeCycleFunction, set, patchProperties } from './util';
 import { ModuleLoader } from "./header";
 
 export {
     ModuleLoader,
-    ModuleProxyBase,
     RpcOptions,
     RpcChannel,
     RpcServer,
@@ -20,14 +19,30 @@ export {
     local
 };
 
-// Auto-Load And Remote.
+const cmd = process.execArgv.concat(process.argv).join(" ");
+const isTsNode = cmd.includes("ts-node");
+const defaultLoader: ModuleLoader = {
+    extension: isTsNode ? ".ts" : ".js",
+    cache: require.cache,
+    load: require,
+    unload(filename) {
+        delete this.cache[filename];
+    }
+}
 
 export class ModuleProxy extends ModuleProxyBase {
     /**
      * If passed to the `ModuleProxy<T>.instance()`, the method will always 
      * return the local instance.
      */
-    local = local;
+    readonly local: symbol;
+
+    constructor(readonly name: string, path: string, loader?: ModuleLoader) {
+        super();
+        patchProperties(this, path, defaultLoader, {});
+        this.local = local;
+        loader && this.setLoader(loader);
+    }
 
     get exports() {
         return {};

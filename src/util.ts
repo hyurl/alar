@@ -3,9 +3,10 @@ import * as path from "path";
 import startsWith = require("lodash/startsWith");
 import { ThenableAsyncGenerator } from 'thenable-generator';
 import { isAsyncGenerator, isGenerator } from "check-iterable";
-import { ModuleProxyBase } from '.';
+import { ModuleProxy as ModuleProxyBase } from "./proxy";
 import { BSP } from "bsp";
 import { clone, declone } from "@hyurl/structured-clone";
+import { ModuleLoader } from './header';
 
 const WinPipe = "\\\\?\\pipe\\";
 
@@ -27,10 +28,16 @@ export function absPath(filename: string, withPipe?: boolean): string {
     return filename;
 }
 
-export function set(target: any, prop: any, value: any, writable = false) {
+export function set(
+    target: any,
+    prop: any,
+    value: any,
+    writable = false,
+    enumerable = false
+) {
     Object.defineProperty(target, prop, {
         configurable: true,
-        enumerable: false,
+        enumerable,
         writable,
         value
     });
@@ -228,4 +235,18 @@ export function getCodecOptions(
             };
         }
     }
+}
+
+export function patchProperties(
+    target: ModuleProxyBase,
+    filename: string,
+    loader: ModuleLoader,
+    singletons: { [name: string]: any }
+) {
+    set(target, "path", path.normalize(filename), false, true);
+    set(target, "loader", loader);
+    set(target, "singletons", singletons);
+    set(target, "remoteSingletons", {});
+    set(target, "children", {});
+    target[RpcState] = 0;
 }

@@ -1,5 +1,5 @@
 import hash = require("string-hash");
-import { sep, normalize, dirname, basename, extname } from "path";
+import { sep, dirname, basename, extname } from "path";
 import { applyMagic } from "js-magic";
 import { ModuleLoader } from './index';
 import { Injectable } from "./di";
@@ -14,33 +14,36 @@ import {
     remotized,
     noLocal,
     set,
-    RpcState
+    RpcState,
+    patchProperties
 } from './util';
 
-const cmd = process.execArgv.concat(process.argv).join(" ");
-const isTsNode = cmd.includes("ts-node");
-const defaultLoader: ModuleLoader = {
-    extension: isTsNode ? ".ts" : ".js",
-    cache: require.cache,
-    load: require,
-    unload(filename) {
-        delete this.cache[filename];
-    }
+function createModuleProxy(
+    name: string,
+    path: string,
+    loader: ModuleLoader,
+    singletons: { [name: string]: any }
+): ModuleProxy<any> {
+    let proxy = function (route: any) {
+        return (<any>proxy).instance(route);
+    };
+
+    Object.setPrototypeOf(proxy, ModuleProxy.prototype);
+    set(proxy, "name", name);
+    patchProperties(<any>proxy, path, loader, singletons);
+
+    return <any>applyMagic(proxy, true);
 }
 
-@applyMagic
-export class ModuleProxyBase<T = any> extends Injectable implements ModuleProxy<T> {
-    readonly path: string;
-    readonly loader: ModuleLoader = defaultLoader;
-    protected singletons: { [name: string]: T } = {};
-    protected remoteSingletons: { [serverId: string]: T } = {};
-    protected children: { [name: string]: ModuleProxy<any> } = {};
 
-    constructor(readonly name: string, path: string) {
-        super();
-        this.path = normalize(path);
-        this[RpcState] = 0;
-    }
+@applyMagic
+export abstract class ModuleProxy<T = any> extends Injectable implements ModuleProxy<T> {
+    abstract readonly name: string;
+    readonly path: string;
+    readonly loader: ModuleLoader;
+    protected singletons: { [name: string]: T };
+    protected remoteSingletons: { [serverId: string]: T };
+    protected children: { [name: string]: ModuleProxy<any> };
 
     get exports(): any {
         if (typeof this.loader.extension === "string") {
@@ -159,15 +162,12 @@ export class ModuleProxyBase<T = any> extends Injectable implements ModuleProxy<
         } else if (prop in this.children) {
             return this.children[prop];
         } else if (typeof prop != "symbol") {
-            let child = new ModuleProxyBase(
+            return this.children[prop] = createModuleProxy(
                 this.name + "." + String(prop),
-                this.path + sep + String(prop)
+                this.path + sep + String(prop),
+                this.loader,
+                this.singletons
             );
-
-            child.singletons = this.singletons;
-            set(child, "loader", this.loader);
-
-            return this.children[prop] = child;
         }
     }
 

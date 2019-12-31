@@ -771,4 +771,19 @@ describe("Alar ModuleProxy", () => {
         await client.close();
         await server.close();
     });
+
+    it("should call the module proxy as a function as expected", async () => {
+        let server = await App.serve({ ...config, codec: "FRON" });
+
+        server.register(app.service.user);
+
+        let client = await App.connect({ ...config, codec: "FRON" });
+
+        client.register(app.service.user);
+
+        assert.strictEqual(await app.service.user().getName(), "Mr. World Budy");
+
+        await client.close();
+        await server.close();
+    });
 });
