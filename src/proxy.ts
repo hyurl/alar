@@ -18,19 +18,33 @@ import {
     patchProperties
 } from './util';
 
-function createModuleProxy(
+const cmd = process.execArgv.concat(process.argv).join(" ");
+const isTsNode = cmd.includes("ts-node");
+export const defaultLoader: ModuleLoader = {
+    extension: isTsNode ? ".ts" : ".js",
+    cache: require.cache,
+    load: require,
+    unload(filename) {
+        delete this.cache[filename];
+    }
+}
+
+/**
+ * Creates a module proxy manually.
+ */
+export function createModuleProxy<T = any>(
     name: string,
     path: string,
-    loader: ModuleLoader,
-    singletons: { [name: string]: any }
-): ModuleProxy<any> {
+    loader?: ModuleLoader,
+    singletons?: { [name: string]: any }
+): ModuleProxy<T> {
     let proxy = function (route: any) {
         return (<any>proxy).instance(route);
     };
 
     Object.setPrototypeOf(proxy, ModuleProxy.prototype);
     set(proxy, "name", name);
-    patchProperties(<any>proxy, path, loader, singletons);
+    patchProperties(<any>proxy, path, loader || defaultLoader, singletons || {});
 
     return <any>applyMagic(proxy, true);
 }

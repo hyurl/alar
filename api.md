@@ -152,6 +152,21 @@ json.setLoader({
 });
 ```
 
+## createModuleProxy
+
+```ts
+export function createModuleProxy<T = any>(
+    name: string,
+    path: string,
+    loader?: ModuleLoader,
+    singletons?: { [name: string]: any }
+): ModuleProxy<T>
+```
+
+Creates a module proxy manually. This function is used under the hood of Alar
+frame work, however, if you want to create a module proxy that is outside the
+root proxy, you can use this function to do so.
+
 ## RpcOptions
 
 ```typescript

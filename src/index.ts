@@ -4,9 +4,19 @@ import startsWith = require("lodash/startsWith");
 import { RpcOptions, RpcChannel } from './rpc/channel';
 import { RpcClient, ClientOptions } from "./rpc/client";
 import { RpcServer } from "./rpc/server";
-import { ModuleProxy as ModuleProxyBase } from "./proxy";
-import { local, RpcState, tryLifeCycleFunction, set, patchProperties } from './util';
 import { ModuleLoader } from "./header";
+import {
+    ModuleProxy as ModuleProxyBase,
+    createModuleProxy,
+    defaultLoader
+} from "./proxy";
+import {
+    local,
+    RpcState,
+    tryLifeCycleFunction,
+    set,
+    patchProperties
+} from './util';
 
 export {
     ModuleLoader,
@@ -16,19 +26,9 @@ export {
     RpcClient,
     ClientOptions,
     FSWatcher,
-    local
+    local,
+    createModuleProxy
 };
-
-const cmd = process.execArgv.concat(process.argv).join(" ");
-const isTsNode = cmd.includes("ts-node");
-const defaultLoader: ModuleLoader = {
-    extension: isTsNode ? ".ts" : ".js",
-    cache: require.cache,
-    load: require,
-    unload(filename) {
-        delete this.cache[filename];
-    }
-}
 
 export class ModuleProxy extends ModuleProxyBase {
     /**
@@ -39,13 +39,8 @@ export class ModuleProxy extends ModuleProxyBase {
 
     constructor(readonly name: string, path: string, loader?: ModuleLoader) {
         super();
-        patchProperties(this, path, defaultLoader, {});
+        patchProperties(this, path, loader || defaultLoader, {});
         this.local = local;
-        loader && this.setLoader(loader);
-    }
-
-    get exports() {
-        return {};
     }
 
     /** Serves an RPC service according to the given configuration. */
