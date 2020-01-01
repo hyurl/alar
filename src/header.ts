@@ -53,17 +53,17 @@ declare global {
         instance(route?: any): AsynchronizedFunctionProperties<EnsureInstanceType<T>> & Voidable<Readonly<NonFunctionProperties<EnsureInstanceType<T>>>>;
 
         /**
+         * Allowing the current module to be injected as a dependency bound to a
+         * property of another class instance.
+         */
+        inject(route?: any): PropertyDecorator;
+
+        /**
          * If the module is registered as remote service, however when no RPC 
          * channel is available, by default, `instance()` will fail to the local
          * instance, using this method to disable the default behavior.
          */
         noLocal(): this;
-
-        /**
-         * Allowing the current module to be injected as a dependency bound to a
-         * property of another class instance.
-         */
-        inject(route?: any): PropertyDecorator;
     }
 }
 
