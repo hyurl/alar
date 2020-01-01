@@ -1,3 +1,5 @@
+import { dict } from './util';
+
 const dependencies = Symbol("dependencies");
 
 type Dependency = {
@@ -19,7 +21,7 @@ function defineAccessor(target: any, prop: string): void {
 function addDependency(dependency: Dependency) {
     return (target: any, prop: string) => {
         if (target[dependencies] === undefined) {
-            target[dependencies] = {};
+            target[dependencies] = dict();
         }
 
         target[dependencies][prop] = dependency;

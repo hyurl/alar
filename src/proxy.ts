@@ -15,7 +15,8 @@ import {
     noLocal,
     set,
     RpcState,
-    patchProperties
+    patchProperties,
+    dict
 } from './util';
 
 const cmd = process.execArgv.concat(process.argv).join(" ");
@@ -35,8 +36,8 @@ export const defaultLoader: ModuleLoader = {
 export function createModuleProxy<T = any>(
     name: string,
     path: string,
-    loader?: ModuleLoader,
-    singletons?: { [name: string]: any }
+    loader = defaultLoader,
+    singletons = dict()
 ): ModuleProxy<T> {
     let proxy = function (route: any) {
         return (<any>proxy).instance(route);
@@ -44,7 +45,7 @@ export function createModuleProxy<T = any>(
 
     Object.setPrototypeOf(proxy, ModuleProxy.prototype);
     set(proxy, "name", name);
-    patchProperties(<any>proxy, path, loader || defaultLoader, singletons || {});
+    patchProperties(<any>proxy, path, loader, singletons);
 
     return <any>applyMagic(proxy, true);
 }

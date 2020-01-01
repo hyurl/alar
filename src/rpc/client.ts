@@ -5,7 +5,7 @@ import { declone } from "@hyurl/structured-clone";
 import isSocketResetError = require('is-socket-reset-error');
 import { ThenableAsyncGenerator, ThenableAsyncGeneratorLike } from 'thenable-generator';
 import { RpcChannel, RpcEvents, RpcOptions, Response, Request } from "./channel";
-import { remotized, createRemoteInstance, humanizeDuration } from "../util";
+import { remotized, createRemoteInstance, humanizeDuration, dict } from "../util";
 
 type Subscriber = (data: any) => void | Promise<void>;
 type ChannelState = "initiated" | "connecting" | "connected" | "closed";
@@ -27,7 +27,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
     protected serverId: string;
     protected state: ChannelState = "initiated";
     protected socket: net.Socket = null;
-    protected registry: { [name: string]: ModuleProxy<any> } = {};
+    protected registry: { [name: string]: ModuleProxy<any> } = dict();
     protected taskId = sequid(0, true);
     protected tasks = new Map<number, Task>();
     protected events = new Map<string, Set<Subscriber>>();

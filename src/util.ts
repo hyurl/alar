@@ -246,7 +246,11 @@ export function patchProperties(
     set(target, "path", path.normalize(filename), false, true);
     set(target, "loader", loader);
     set(target, "singletons", singletons);
-    set(target, "remoteSingletons", {});
-    set(target, "children", {});
+    set(target, "remoteSingletons", dict());
+    set(target, "children", dict());
     target[RpcState] = 0;
+}
+
+export function dict(): { [x: string]: any } {
+    return Object.create(null);
 }

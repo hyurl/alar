@@ -7,7 +7,7 @@ import { isIteratorLike } from "check-iterable";
 import { source, ThenableAsyncGenerator } from "thenable-generator";
 import isSocketResetError = require("is-socket-reset-error");
 import { RpcChannel, RpcEvents, Request, RpcOptions } from "./channel";
-import { absPath, local, RpcState, tryLifeCycleFunction } from "../util";
+import { absPath, local, RpcState, tryLifeCycleFunction, dict } from "../util";
 import { ModuleProxy as ModuleProxyBase } from '../proxy';
 
 const authorized = Symbol("authorized");
@@ -16,7 +16,7 @@ export class RpcServer extends RpcChannel {
     /** The unique ID of the server, used for the client routing requests. */
     readonly id: string;
     protected server: net.Server;
-    protected registry: { [name: string]: ModuleProxy<any> } = {};
+    protected registry: { [name: string]: ModuleProxy<any> } = dict();
     protected clients = new BiMap<string, net.Socket>();
     protected suspendedTasks = new Map<net.Socket, Map<number, ThenableAsyncGenerator>>();
 

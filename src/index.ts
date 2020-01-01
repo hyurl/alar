@@ -15,7 +15,8 @@ import {
     RpcState,
     tryLifeCycleFunction,
     set,
-    patchProperties
+    patchProperties,
+    dict
 } from './util';
 
 export {
@@ -39,7 +40,7 @@ export class ModuleProxy extends ModuleProxyBase {
 
     constructor(readonly name: string, path: string, loader?: ModuleLoader) {
         super();
-        patchProperties(this, path, loader || defaultLoader, {});
+        patchProperties(this, path, loader || defaultLoader, dict());
         this.local = local;
     }
 
