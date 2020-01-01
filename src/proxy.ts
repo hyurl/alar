@@ -8,7 +8,6 @@ import cloneDeep = require("lodash/cloneDeep");
 import merge = require("lodash/merge");
 import { clone } from "@hyurl/structured-clone";
 import isClass from "could-be-class";
-import { format } from 'util';
 import {
     createLocalInstance,
     local,
@@ -191,10 +190,10 @@ export abstract class ModuleProxy<T = any> extends Injectable implements ModuleP
     }
 
     toString() {
-        return format(this);
+        return this.name;
     }
 
     toJSON() {
-        return Object.create(null);
+        return this.name;
     }
 }
