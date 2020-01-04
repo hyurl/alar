@@ -46,6 +46,9 @@ The interface has the following properties and methods:
 **CHANGE: Since v5.4, the module proxy now can be called as a function, and**
 **it acts just the same as calling `instance()` function.**
 
+**CHANGE: Since v5.5, the module proxy now can be called as a class constructor,**
+**and it acts just the same as calling `create()` function.**
+
 ## ModuleConstructor
 
 This interface will be globalized as well, it indicates the very class 

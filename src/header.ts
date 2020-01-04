@@ -25,6 +25,7 @@ declare global {
     }
 
     interface ModuleProxy<T> {
+        new(...args: T extends new (...args: infer A) => any ? A : any[]): EnsureInstanceType<T>;
         (local: symbol): AsynchronizedFunctionProperties<EnsureInstanceType<T>> & Readonly<NonFunctionProperties<EnsureInstanceType<T>>>;
         (route?: any): AsynchronizedFunctionProperties<EnsureInstanceType<T>> & Voidable<Readonly<NonFunctionProperties<EnsureInstanceType<T>>>>;
 

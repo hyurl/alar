@@ -40,7 +40,11 @@ export function createModuleProxy<T = any>(
     singletons = dict()
 ): ModuleProxy<T> {
     let proxy = function (route: any) {
-        return (<any>proxy).instance(route);
+        if (!new.target) {
+            return (<any>proxy).instance(route);
+        } else {
+            return (<any>proxy).create(route);
+        }
     };
 
     Object.setPrototypeOf(proxy, ModuleProxy.prototype);

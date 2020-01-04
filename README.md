@@ -102,11 +102,15 @@ import "./app";
 app.bootstrap.instance().init();
 
 // Since v5.4, calling instance() is optional, you can call the module proxy
-// as function directly. So this is equivalent to the above one:
+// as a function directly. So this is equivalent to the above one:
 app.bootstrap().init();
 
 // The create() method will create a new instance.
 var user = app.service.user.create("Mr. Handsome");
+
+// Since v5.5, calling create() is optional, you can call the module proxy
+// as a class directly. So this is equivalent to the above one:
+var user = new app.service.user("Mr. Handsome");
 
 console.log(user.getName()); // Mr. Handsome
 ```

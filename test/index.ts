@@ -51,16 +51,20 @@ describe("Alar ModuleProxy", () => {
         assert.strictEqual(App.resolve(app.service.user.path + ".js"), "app.service.user");
     });
 
-    it("should create instances via create() method as expected", async () => {
-        let user1 = app.service.user.create("Mr. Handsome");
-        let user2 = app.service.user.create("Mr. World");
+    it("should create instance via create() method as expected", async () => {
+        let user = app.service.user.create("Mr. Handsome");
 
-        assert.ok(user1 instanceof User);
-        assert.ok(user2 instanceof User);
-        assert.strictEqual(user1.name, "Mr. Handsome");
-        assert.strictEqual(user2.name, "Mr. World");
-        assert.strictEqual(user1.getName(), user1.name);
-        assert.strictEqual(user2.getName(), user2.name);
+        assert.ok(user instanceof User);
+        assert.strictEqual(user.name, "Mr. Handsome");
+        assert.strictEqual(user.getName(), user.name);
+    });
+
+    it("should crate instance with new keyword as expected", async () => {
+        let user = new app.service.user("Mr. Handsome");
+
+        assert.ok(user instanceof User);
+        assert.strictEqual(user.name, "Mr. Handsome");
+        assert.strictEqual(user.getName(), user.name);
     });
 
     it("should create instance via ctor property as expected", () => {
@@ -77,6 +81,14 @@ describe("Alar ModuleProxy", () => {
         assert.strictEqual(app.service.user.instance().name, "Mr. Handsome");
         await app.service.user.instance(alar.local).setName("Mr. World");
         assert.strictEqual(app.service.user.instance().name, "Mr. World");
+    });
+
+    it("should get singleton instance by calling the module proxy as a function as expected", async () => {
+        await app.service.user(alar.local).setName("Mr. Handsome");
+        assert.ok(app.service.user() instanceof User);
+        assert.strictEqual(app.service.user().name, "Mr. Handsome");
+        await app.service.user(alar.local).setName("Mr. World");
+        assert.strictEqual(app.service.user().name, "Mr. World");
     });
 
     it("should access to a prototype module as expected", () => {
@@ -767,21 +779,6 @@ describe("Alar ModuleProxy", () => {
         client.register(app.service.user);
 
         assert.strictEqual(await app.service.user.instance().getName(), "Mr. World Budy");
-
-        await client.close();
-        await server.close();
-    });
-
-    it("should call the module proxy as a function as expected", async () => {
-        let server = await App.serve({ ...config, codec: "FRON" });
-
-        server.register(app.service.user);
-
-        let client = await App.connect({ ...config, codec: "FRON" });
-
-        client.register(app.service.user);
-
-        assert.strictEqual(await app.service.user().getName(), "Mr. World Budy");
 
         await client.close();
         await server.close();
