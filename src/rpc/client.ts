@@ -5,7 +5,15 @@ import { declone } from "@hyurl/structured-clone";
 import isSocketResetError = require('is-socket-reset-error');
 import { ThenableAsyncGenerator, ThenableAsyncGeneratorLike } from 'thenable-generator';
 import { RpcChannel, RpcEvents, RpcOptions, Response, Request } from "./channel";
-import { remotized, createRemoteInstance, humanizeDuration, dict } from "../util";
+import { ModuleProxy as ModuleProxyBase } from "../proxy";
+import {
+    createRemoteInstance,
+    humanizeDuration,
+    throwNotAvailableError,
+    readyState,
+    dict,
+    local
+} from "../util";
 
 type Subscriber = (data: any) => void | Promise<void>;
 type ChannelState = "initiated" | "connecting" | "connected" | "closed";
@@ -63,11 +71,13 @@ export class RpcClient extends RpcChannel implements ClientOptions {
 
     open(): Promise<this> {
         return new Promise((resolve, reject) => {
+            let { serverId } = this;
+
             if (this.socket && this.socket.connecting) {
-                throw new Error(`Channel to ${this.serverId} is already open`);
+                throw new Error(`Channel to ${serverId} is already open`);
             } else if (this.closed) {
                 throw new Error(
-                    `Cannot reconnect to ${this.serverId} after closing the channel`
+                    `Cannot reconnect to ${serverId} after closing the channel`
                 );
             }
 
@@ -78,6 +88,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
                 this.prepareChannel();
                 this.finishConnect = () => {
                     this.state = "connected";
+                    this.resume();
 
                     if (this.pingTimer && this.reconnect) {
                         return resolve(this);
@@ -118,7 +129,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
                             // down permanently and close the client. 
                             await this.close();
                             console.error(
-                                `Connection to ${this.serverId} lost permanently.`
+                                `Connection to ${serverId} lost permanently`
                             );
                         } else {
                             this.reconnect.backoff();
@@ -179,52 +190,33 @@ export class RpcClient extends RpcChannel implements ClientOptions {
 
     register<T>(mod: ModuleProxy<T>) {
         this.registry[mod.name] = mod;
+        let singletons = (<ModuleProxyBase><any>mod)["remoteSingletons"];
 
-        mod[remotized] = true;
-        mod["remoteSingletons"][this.serverId] = createRemoteInstance(
+        singletons[this.serverId] = createRemoteInstance(
             mod,
-            (prop) => {
-                return this.createFunction(mod.name, prop);
-            }
+            (prop) => this.createFunction(<ModuleProxyBase><any>mod, prop)
         );
+        singletons[this.serverId][readyState] = this.connected ? 2 : 0;
 
         return this;
     }
 
-    /** Pauses the channel and redirect traffic to other channels. */
-    pause(): boolean {
-        let { serverId } = this;
-        let success = false;
-
+    private flushReadyState(state: number) {
         for (let name in this.registry) {
-            let instances = this.registry[name]["remoteSingletons"];
-
-            // Remove the remote instance from the module proxy, for removed 
-            // instance, the traffic will be redirected to other alive services,
-            // if all the services are dead, RPC calling should just fail with 
-            // errors.
-            delete instances[serverId];
-            success = true;
+            let mod: ModuleProxyBase = <any>this.registry[name];
+            let singletons = mod["remoteSingletons"];
+            singletons[this.serverId][readyState] = state;
         }
+    }
 
-        return success;
+    /** Pauses the channel and redirect traffic to other channels. */
+    pause(): void {
+        this.flushReadyState(0);
     }
 
     /** Resumes the channel and continue handling traffic. */
-    resume(): boolean {
-        let { serverId } = this;
-        let success = false;
-
-        for (let name in this.registry) {
-            let instances = this.registry[name]["remoteSingletons"];
-
-            if (!instances[serverId]) {
-                this.register(this.registry[name]);
-                success = true;
-            }
-        }
-
-        return success;
+    resume(): void {
+        this.flushReadyState(2);
     }
 
     /** Subscribes a handle function to the corresponding topic. */
@@ -264,14 +256,26 @@ export class RpcClient extends RpcChannel implements ClientOptions {
         }
     }
 
-    protected createFunction(name: string, method: string) {
+    protected createFunction(mod: ModuleProxyBase, method: string) {
         let self = this;
         return function (...args: any[]) {
+            // If the RPC channel is not available, call the local instance and
+            // wrap it asynchronous.
+            if (!self.connected) {
+                if (mod.fallbackToLocal()) {
+                    return new ThenableAsyncGenerator(
+                        mod.instance(local)[method](...args)
+                    );
+                } else {
+                    throwNotAvailableError(mod.name);
+                }
+            }
+
             // Return a ThenableAsyncGenerator instance when the remote function
             // is called, so that it can be awaited or used as a generator.
             return new ThenableAsyncGenerator(new ThenableIteratorProxy(
                 self,
-                name,
+                mod.name,
                 method,
                 ...args
             ));

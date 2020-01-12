@@ -1,19 +1,21 @@
 import * as os from "os";
 import * as path from "path";
 import startsWith = require("lodash/startsWith");
-import { ThenableAsyncGenerator } from 'thenable-generator';
-import { isAsyncGenerator, isGenerator } from "check-iterable";
 import { ModuleProxy as ModuleProxyBase } from "./proxy";
 import { BSP } from "bsp";
 import { clone, declone } from "@hyurl/structured-clone";
 import { ModuleLoader } from './header';
 
 const WinPipe = "\\\\?\\pipe\\";
-
 export const local = Symbol("local");
-export const remotized = Symbol("remotized");
-export const noLocal = Symbol("noLocal");
-export const RpcState = Symbol("RpcState");
+
+/**
+ * - 0: not ready (default)
+ * - 1: initiating
+ * - 2: ready
+ * - 3: destroying
+ */
+export const readyState = Symbol("readyState");
 
 export function absPath(filename: string, withPipe?: boolean): string {
     // resolve path to be absolute
@@ -43,12 +45,12 @@ export function set(
     });
 }
 
-export function getInstance(mod: ModuleProxy<any>, instantiate = true) {
+export function getInstance(mod: ModuleProxy<any>, forRemote = false) {
     let ins: any;
     let { ctor } = mod;
 
     if (ctor) {
-        if (instantiate) {
+        if (!forRemote) {
             if (typeof ctor.getInstance === "function") {
                 ins = ctor.getInstance();
             } else {
@@ -76,6 +78,10 @@ export function mergeFnProperties(fn: Function, origin: Function) {
     return fn;
 }
 
+export function isOwnKey(obj: any, key: string | symbol): boolean {
+    return Object.prototype.hasOwnProperty.call(obj, key);
+}
+
 export function createRemoteInstance(
     mod: ModuleProxy<any>,
     fnCreator: (prop: string) => Function
@@ -84,63 +90,31 @@ export function createRemoteInstance(
     // Generate a proxified singleton instance to the module, so that it can
     // be used for remote requests. the remote instance should only return
     // methods.
-    return new Proxy(getInstance(mod, false), {
-        get: (ins, prop: string) => {
+    return new Proxy(getInstance(mod, true), {
+        get: (ins, prop: string | symbol) => {
+            if (prop === readyState) {
+                return ins[readyState];
+            }
+
             let type = typeof ins[prop];
             let isFn = type === "function";
 
-            if (isFn && !ins[prop].proxified
-                && !(<Object>ins).hasOwnProperty(prop)
-            ) {
-                set(ins, prop, mergeFnProperties(fnCreator(prop), ins[prop]));
+            if (isFn && !ins[prop]["proxified"] && !isOwnKey(ins, prop)) {
+                set(
+                    ins,
+                    prop,
+                    mergeFnProperties(fnCreator(<string>prop), ins[prop])
+                );
             }
 
             return isFn ? ins[prop] : (type === "undefined" ? undefined : null);
         },
-        has: (ins, prop: string) => {
-            return typeof ins[prop] === "function";
+        has: (ins, prop: string | symbol) => {
+            return prop === readyState
+                ? (prop in ins)
+                : typeof ins[prop] === "function";
         }
     });
-}
-
-export function createLocalInstance(mod: ModuleProxy<any>) {
-    return new Proxy(getInstance(mod), {
-        get: (ins, prop: string) => {
-            if (typeof ins[prop] === "function"
-                && !ins[prop].proxified
-                && !(<Object>ins).hasOwnProperty(prop)
-            ) {
-                let origin: Function = ins[prop];
-
-                set(ins,
-                    prop,
-                    mergeFnProperties(asynchronize(origin, ins), origin),
-                    true);
-            }
-
-            return ins[prop];
-        }
-    });
-}
-
-function asynchronize(origin: Function, thisArg: any) {
-    return function (...args: any[]) {
-        try {
-            let res = origin.apply(thisArg, args);
-
-            if (res) {
-                if (isAsyncGenerator(res) || isGenerator(res)) {
-                    return new ThenableAsyncGenerator(res);
-                } else if (typeof res["then"] === "function") {
-                    return res;
-                }
-            }
-
-            return Promise.resolve(res);
-        } catch (err) {
-            return Promise.reject(err);
-        }
-    };
 }
 
 export function humanizeDuration(duration: number): string {
@@ -165,13 +139,30 @@ export function humanizeDuration(duration: number): string {
 }
 
 export async function tryLifeCycleFunction(
-    mod: ModuleProxyBase,
+    mod: ModuleProxy<{ init?(): any, destroy?(): any }>,
     fn: "init" | "destroy"
 ) {
-    if (RpcState in mod &&
-        typeof mod.instance(local, true)[fn] === "function") {
-        await mod.instance(local, true)[fn]();
+    let ins = mod();
+
+    if (fn === "init") {
+        if (typeof ins.init === "function") {
+            ins[readyState] = 1; // initiating
+            await ins.init();
+        }
+
+        ins[readyState] = 2; // ready
+    } else if (fn === "destroy") {
+        if (typeof ins.destroy === "function") {
+            ins[readyState] = 3; // destroying
+            await ins.destroy();
+        }
+
+        ins[readyState] = 0; // not ready
     }
+}
+
+export function throwNotAvailableError(name: string) {
+    throw new ReferenceError(`Service ${name} is not available`);
 }
 
 export function getCodecOptions(
@@ -203,22 +194,22 @@ export function getCodecOptions(
             let BSON: { serialize: Function, deserialize: Function };
 
             try {
-                let BSONType = require("bson-ext");
-                BSON = new BSONType([
-                    BSONType.Binary,
-                    BSONType.Code,
-                    BSONType.DBRef,
-                    BSONType.Decimal128,
-                    BSONType.Double,
-                    BSONType.Int32,
-                    BSONType.Long,
-                    BSONType.Map,
-                    BSONType.MaxKey,
-                    BSONType.MinKey,
-                    BSONType.ObjectId,
-                    BSONType.BSONRegExp,
-                    BSONType.Symbol,
-                    BSONType.Timestamp
+                let BSONExt = require("bson-ext");
+                BSON = new BSONExt([
+                    BSONExt.Binary,
+                    BSONExt.Code,
+                    BSONExt.DBRef,
+                    BSONExt.Decimal128,
+                    BSONExt.Double,
+                    BSONExt.Int32,
+                    BSONExt.Long,
+                    BSONExt.Map,
+                    BSONExt.MaxKey,
+                    BSONExt.MinKey,
+                    BSONExt.ObjectId,
+                    BSONExt.BSONRegExp,
+                    BSONExt.Symbol,
+                    BSONExt.Timestamp
                 ]);
             } catch (e) {
                 try {
@@ -248,7 +239,6 @@ export function patchProperties(
     set(target, "singletons", singletons);
     set(target, "remoteSingletons", dict());
     set(target, "children", dict());
-    target[RpcState] = 0;
 }
 
 export function dict(): { [x: string]: any } {

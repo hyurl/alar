@@ -51,8 +51,8 @@ describe("Alar ModuleProxy", () => {
         assert.strictEqual(App.resolve(app.service.user.path + ".js"), "app.service.user");
     });
 
-    it("should create instance via create() method as expected", async () => {
-        let user = app.service.user.create("Mr. Handsome");
+    it("should create instance as expected", async () => {
+        let user = new app.service.user("Mr. Handsome");
 
         assert.ok(user instanceof User);
         assert.strictEqual(user.name, "Mr. Handsome");
@@ -67,27 +67,11 @@ describe("Alar ModuleProxy", () => {
         assert.strictEqual(user.getName(), user.name);
     });
 
-    it("should create instance via ctor property as expected", () => {
-        let bootstrap = new app.bootstrap.ctor();
-
-        bootstrap.init();
-        assert.ok(bootstrap instanceof Bootstrap);
-        assert.deepStrictEqual(bootstrap.data, ["hello", "world"]);
-    });
-
-    it("should get singleton instance via instance() method as expected", async () => {
-        await app.service.user.instance(alar.local).setName("Mr. Handsome");
-        assert.ok(app.service.user.instance() instanceof User);
-        assert.strictEqual(app.service.user.instance().name, "Mr. Handsome");
-        await app.service.user.instance(alar.local).setName("Mr. World");
-        assert.strictEqual(app.service.user.instance().name, "Mr. World");
-    });
-
-    it("should get singleton instance by calling the module proxy as a function as expected", async () => {
-        await app.service.user(alar.local).setName("Mr. Handsome");
+    it("should get singleton instance as expected", async () => {
+        app.service.user().setName("Mr. Handsome");
         assert.ok(app.service.user() instanceof User);
         assert.strictEqual(app.service.user().name, "Mr. Handsome");
-        await app.service.user(alar.local).setName("Mr. World");
+        app.service.user().setName("Mr. World");
         assert.strictEqual(app.service.user().name, "Mr. World");
     });
 
@@ -98,15 +82,15 @@ describe("Alar ModuleProxy", () => {
     });
 
     it("should create instance from a prototype module as expected", () => {
-        let ins = app.config.create();
+        let ins = new app.config();
         assert.deepStrictEqual(ins, config);
 
-        let ins2 = app.config.create({ host: "localhost" });
+        let ins2 = new app.config({ host: "localhost" });
         assert.deepStrictEqual(ins2, { ...config, host: "localhost" });
     });
 
     it("should use the prototype module as singleton as expected", () => {
-        let ins = app.config.instance();
+        let ins = app.config();
         assert.deepStrictEqual(ins, config);
     });
 
@@ -127,7 +111,7 @@ describe("Alar ModuleProxy", () => {
             }
         });
 
-        assert.deepStrictEqual(json.test.instance(), { name: "JSON", version: "1.0.0" });
+        assert.deepStrictEqual(json.test(), { name: "JSON", version: "1.0.0" });
     });
 
     it("should use a custom loader with multiple extensions as expected", () => {
@@ -159,8 +143,8 @@ describe("Alar ModuleProxy", () => {
             }
         });
 
-        assert.deepStrictEqual(json.test1.instance(), expected);
-        assert.deepStrictEqual(json.test2.instance(), expected);
+        assert.deepStrictEqual(json.test1(), expected);
+        assert.deepStrictEqual(json.test2(), expected);
         assert.strictEqual(Json.resolve(__dirname + "/json/test1.js"), "json.test1");
         assert.strictEqual(Json.resolve(__dirname + "/json/test2.json"), "json.test2")
     });
@@ -175,7 +159,7 @@ describe("Alar ModuleProxy", () => {
 
         client.register(app.service.user);
 
-        assert.strictEqual(await app.service.user.instance().getName(), "Mr. World");
+        assert.strictEqual(await app.service.user("").getName(), "Mr. World");
 
         await client.close();
         await server.close();
@@ -190,7 +174,7 @@ describe("Alar ModuleProxy", () => {
 
         client.register(app.service.user);
 
-        assert.strictEqual(await app.service.user.instance().getName(), "Mr. World");
+        assert.strictEqual(await app.service.user("").getName(), "Mr. World");
 
         await client.close();
         await server.close();
@@ -206,7 +190,7 @@ describe("Alar ModuleProxy", () => {
 
         client.register(app.service.user);
 
-        assert.strictEqual(await app.service.user.instance().getName(), "Mr. World");
+        assert.strictEqual(await app.service.user("").getName(), "Mr. World");
 
         await client.close();
         await server.close();
@@ -217,27 +201,6 @@ describe("Alar ModuleProxy", () => {
         let client = await App.connect(config);
 
         assert.deepStrictEqual(server.getClients(), [client.id]);
-
-        await client.close();
-        await server.close();
-    });
-
-    it("should pause and resume remote service as expected as expected", async () => {
-        let server = await App.serve(config);
-        let client = await App.connect(config);
-
-        server.register(app.service.user);
-        client.register(app.service.user);
-
-        assert.ok(app.service.user.instance() !== app.service.user.instance(App.local));
-
-        client.pause();
-
-        assert.ok(app.service.user.instance() === app.service.user.instance(App.local));
-
-        client.resume();
-
-        assert.ok(app.service.user.instance() !== app.service.user.instance(App.local));
 
         await client.close();
         await server.close();
@@ -287,7 +250,7 @@ describe("Alar ModuleProxy", () => {
             await sleep(100);
         }
 
-        assert.strictEqual(await app.service.user.instance().getName(), "Mr. Handsome");
+        assert.strictEqual(await app.service.user("").getName(), "Mr. Handsome");
 
         await client.close();
         proc.kill();
@@ -299,7 +262,7 @@ describe("Alar ModuleProxy", () => {
 
         try {
             app.service.user.noLocal();
-            await app.service.user.instance().getName();
+            await app.service.user("").getName();
         } catch (e) {
             err = e;
         }
@@ -413,7 +376,7 @@ describe("Alar ModuleProxy", () => {
         server.register(app.service.user);
         client.register(app.service.user);
 
-        let generator = app.service.user.instance().getFriends("Open Source", "Good Fella");
+        let generator = app.service.user("").getFriends("Open Source", "Good Fella");
         while (true) {
             let res = await generator.next();
 
@@ -437,7 +400,7 @@ describe("Alar ModuleProxy", () => {
         server.register(app.service.user);
         client.register(app.service.user);
 
-        let generator = app.service.user.instance().repeatAfterMe();
+        let generator = app.service.user("").repeatAfterMe();
         let result = await generator.next(<any>"Google");
         let result1 = await generator.next(<any>"Google");
 
@@ -455,11 +418,10 @@ describe("Alar ModuleProxy", () => {
         server.register(app.service.user);
         client.register(app.service.user);
 
-        let generator = app.service.user.instance().repeatAfterMe();
+        let generator = app.service.user("").repeatAfterMe();
         let result = await generator.return("Google");
 
         assert.deepStrictEqual(result, { value: "Google", done: true });
-        assert.strictEqual(await generator, "Google");
 
         await client.close();
         await server.close();
@@ -472,7 +434,7 @@ describe("Alar ModuleProxy", () => {
         server.register(app.service.user);
         client.register(app.service.user);
 
-        let generator = app.service.user.instance().repeatAfterMe();
+        let generator = app.service.user("").repeatAfterMe();
         let _err = new Error("test throw method");
         let err: Error;
 
@@ -486,7 +448,6 @@ describe("Alar ModuleProxy", () => {
         assert.ok(err instanceof Error);
         assert.strictEqual(err.message, "test throw method");
         assert.deepStrictEqual(await generator.next(), { value: undefined, done: true });
-        assert.strictEqual(await generator, undefined);
 
         await client.close();
         await server.close();
@@ -494,11 +455,11 @@ describe("Alar ModuleProxy", () => {
 
     it("should get result from a local generator as expected", async () => {
         let result: (string | string[])[] = [];
-        let generator = app.service.user.instance(App.local)
+        let generator = app.service.user()
             .getFriends("Open Source", "Good Fella");
 
         while (true) {
-            let res = await generator.next();
+            let res = generator.next();
 
             result.push(res.value);
 
@@ -511,7 +472,7 @@ describe("Alar ModuleProxy", () => {
     });
 
     it("should invoke next method in the local generator as expected", async () => {
-        let generator = app.service.user.instance(App.local).repeatAfterMe();
+        let generator = app.service.user().repeatAfterMe();
         let result = await generator.next(<any>"Google");
         let result1 = await generator.next(<any>"Google");
 
@@ -520,15 +481,14 @@ describe("Alar ModuleProxy", () => {
     });
 
     it("should invoke return method in the local generator as expected", async () => {
-        let generator = app.service.user.instance(App.local).repeatAfterMe();
+        let generator = app.service.user().repeatAfterMe();
         let result = await generator.return("Google");
 
         assert.deepStrictEqual(result, { value: "Google", done: true });
-        assert.strictEqual(await generator, "Google");
     });
 
     it("should invoke throw method in the local generator as expected", async () => {
-        let generator = app.service.user.instance(App.local).repeatAfterMe();
+        let generator = app.service.user().repeatAfterMe();
         let _err = new Error("test throw method");
         let err: Error;
 
@@ -542,13 +502,12 @@ describe("Alar ModuleProxy", () => {
         assert.ok(err instanceof Error);
         assert.strictEqual(err.message, "test throw method");
         assert.deepStrictEqual(await generator.next(), { value: undefined, done: true });
-        assert.strictEqual(await generator, undefined);
     });
 
     it("should return as-is from a local instance regular method as expected", async () => {
         let data = {};
-        let name = await app.service.user.instance(App.local).getName();
-        let result = await app.service.user.instance(App.local).setAndGet(data);
+        let name = app.service.user().getName();
+        let result = await app.service.user().setAndGet(data);
 
         assert.strictEqual(name, "Mr. World");
         assert.strictEqual(result, data);
@@ -565,7 +524,7 @@ describe("Alar ModuleProxy", () => {
         let err: MyError;
 
         try {
-            await app.service.user.instance().userError();
+            await app.service.user("").userError();
         } catch (e) {
             err = e;
         }
@@ -590,7 +549,7 @@ describe("Alar ModuleProxy", () => {
         let err: string;
 
         try {
-            await app.service.user.instance().nonStandardError();
+            await app.service.user("").nonStandardError();
         } catch (e) {
             err = e;
         }
@@ -611,7 +570,7 @@ describe("Alar ModuleProxy", () => {
         let time = Date.now();
 
         // DO NOT await
-        app.service.user.instance().setTime(time);
+        app.service.user("").setTime(time);
 
         while (!data.time) {
             await sleep(10);
@@ -630,7 +589,7 @@ describe("Alar ModuleProxy", () => {
         server.register(app.service.user);
         client.register(app.service.user);
 
-        let promise = app.service.user.instance().setAndGet("Hello, World!");
+        let promise = app.service.user("").setAndGet("Hello, World!");
 
         await sleep(50);
 
@@ -648,7 +607,7 @@ describe("Alar ModuleProxy", () => {
         client.register(app.service.user);
 
         assert.strictEqual(
-            app.service.user.instance(server.dsn),
+            app.service.user(server.dsn),
             app.service.user["remoteSingletons"][server.dsn]
         );
 
@@ -665,27 +624,9 @@ describe("Alar ModuleProxy", () => {
         client.register(app.service.user);
 
         assert.strictEqual(
-            app.service.user.instance("test-server"),
+            app.service.user("test-server"),
             app.service.user["remoteSingletons"]["test-server"]
         );
-
-        await client.close();
-        await server.close();
-    });
-
-    it("should not proxify any property functions in an instance", async () => {
-        let server = await App.serve(config);
-        let client = await App.connect(config);
-        let newFn = () => { };
-
-        server.register(app.service.user);
-        client.register(app.service.user);
-
-        assert.strictEqual(app.service.user.instance(App.local).setName["proxified"], true);
-        assert.strictEqual(app.service.user.instance(App.local)["propFn"]["proxified"], undefined);
-
-        app.service.user.instance(App.local)["propFn"] = newFn;
-        assert.strictEqual(app.service.user.instance(App.local)["propFn"], newFn);
 
         await client.close();
         await server.close();
@@ -695,7 +636,7 @@ describe("Alar ModuleProxy", () => {
 
     it("should add dependency as expected", async () => {
         class Article {
-            @app.service.user.inject()
+            @app.service.user.inject("")
             protected admin: User;
 
             async getAdminName(): Promise<string> {
@@ -705,10 +646,10 @@ describe("Alar ModuleProxy", () => {
 
         let server = await App.serve(config);
         let client = await App.connect(config);
-        let article = new Article;
 
         server.register(app.service.user);
         client.register(app.service.user);
+        let article = new Article;
 
         assert.strictEqual(await article.getAdminName(), "Mr. World");
 
@@ -726,11 +667,11 @@ describe("Alar ModuleProxy", () => {
         server.register(app.service.user);
         await server.init();
 
-        assert.strictEqual(await app.service.user.instance(alar.local).getName(), "Mr. Handsome");
+        assert.strictEqual(app.service.user().getName(), "Mr. Handsome");
 
         await server.close();
 
-        assert.strictEqual(await app.service.user.instance(alar.local).getName(), "Mr. World");
+        assert.strictEqual(app.service.user().getName(), "Mr. World");
     });
 
     /////////////////////// Life Cycle Support /////////////////////////////////
@@ -743,13 +684,15 @@ describe("Alar ModuleProxy", () => {
 
         await new Promise(resolve => watcher.once("ready", resolve));
 
-        assert.strictEqual(await app.service.user.instance(App.local).getName(), "Mr. World");
+        assert.strictEqual(app.service.user().getName(), "Mr. World");
 
-        // await sleep(500); // wait a while for watcher to be ready
+        // update file content
         fs.writeFileSync(app.service.user.path + ".js", newContents, "utf8");
-        await new Promise(resolve => watcher.once("change", resolve));
 
-        assert.strictEqual(await app.service.user.instance(App.local).getName(), "Mr. World Budy");
+        await new Promise(resolve => watcher.once("change", resolve));
+        await sleep(100); // wait a while for reload
+
+        assert.strictEqual(app.service.user().getName(), "Mr. World Budy");
 
         watcher.close();
     });
@@ -763,7 +706,7 @@ describe("Alar ModuleProxy", () => {
 
         client.register(app.service.user);
 
-        assert.strictEqual(await app.service.user.instance().getName(), "Mr. World Budy");
+        assert.strictEqual(await app.service.user("").getName(), "Mr. World Budy");
 
         await client.close();
         await server.close();
@@ -778,7 +721,7 @@ describe("Alar ModuleProxy", () => {
 
         client.register(app.service.user);
 
-        assert.strictEqual(await app.service.user.instance().getName(), "Mr. World Budy");
+        assert.strictEqual(await app.service.user("").getName(), "Mr. World Budy");
 
         await client.close();
         await server.close();

@@ -1,6 +1,7 @@
 import { extname, sep } from "path";
 import { watch, FSWatcher } from "chokidar";
 import startsWith = require("lodash/startsWith");
+import once = require("lodash/once");
 import { RpcOptions, RpcChannel } from './rpc/channel';
 import { RpcClient, ClientOptions } from "./rpc/client";
 import { RpcServer } from "./rpc/server";
@@ -12,14 +13,14 @@ import {
 } from "./proxy";
 import {
     local,
-    RpcState,
-    tryLifeCycleFunction,
     set,
+    dict,
     patchProperties,
-    dict
+    tryLifeCycleFunction,
 } from './util';
 
 export {
+    local,
     ModuleLoader,
     RpcOptions,
     RpcChannel,
@@ -27,7 +28,6 @@ export {
     RpcClient,
     ClientOptions,
     FSWatcher,
-    local,
     createModuleProxy
 };
 
@@ -37,6 +37,8 @@ export class ModuleProxy extends ModuleProxyBase {
      * return the local instance.
      */
     readonly local: symbol;
+    private server: RpcServer = null;
+    private client: RpcClient = null;
 
     constructor(readonly name: string, path: string, loader?: ModuleLoader) {
         super();
@@ -46,12 +48,15 @@ export class ModuleProxy extends ModuleProxyBase {
 
     /** Serves an RPC service according to the given configuration. */
     serve(config: string | RpcOptions): Promise<RpcServer> {
-        return new RpcServer(<any>config).open();
+        this.server = new RpcServer(<any>config);
+        this.server["proxyRoot"] = this;
+        return this.server.open();
     }
 
     /** Connects an RPC service according to the given configuration. */
     connect(config: string | ClientOptions): Promise<RpcClient> {
-        return new RpcClient(<any>config).open();
+        this.client = new RpcClient(<any>config);
+        return this.client.open();
     }
 
     /** Resolves the given path to a module name. */
@@ -90,39 +95,33 @@ export class ModuleProxy extends ModuleProxyBase {
         ) => {
             let name = this.resolve(filename);
 
-            if (name) {
-                if (this.singletons[name]) {
-                    let unloaded = false;
-                    let tryUnload = () => {
-                        if (!unloaded) {
-                            delete this.singletons[name];
-                            this.loader.unload(filename);
-                            unloaded = true;
-                        }
-                    };
+            if (name && this.singletons[name]) {
+                let tryUnload = once(() => {
+                    delete this.singletons[name];
+                    this.loader.unload(filename);
+                });
 
-                    try {
-                        if (this[RpcState]) {
-                            this[RpcState] = 2;
-                            await tryLifeCycleFunction(this, "destroy");
-                        }
-
+                try {
+                    if (this.server &&
+                        this.server["enableLifeCycle"] &&
+                        this.server["registry"][name]
+                    ) {
+                        let mod = this.server["registry"][name];
+                        await tryLifeCycleFunction(mod, "destroy");
                         tryUnload();
-
-                        if (this[RpcState]) {
-                            await tryLifeCycleFunction(this, "init");
-                            this[RpcState] = 1;
-                        }
-                    } catch (err) {
-                        console.error(err);
+                        await tryLifeCycleFunction(mod, "init");
+                    } else {
                         tryUnload();
                     }
-                } else {
-                    this.loader.unload(filename);
+                } catch (err) {
+                    console.error(err);
+                    tryUnload();
                 }
-
-                cb && cb(event, filename);
+            } else {
+                this.loader.unload(filename);
             }
+
+            cb && cb(event, filename);
         };
 
         return watch(path, {

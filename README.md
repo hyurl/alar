@@ -4,6 +4,9 @@ Alar is a light-weight framework that provides applications the ability to
 auto-load and hot-reload modules, as well as the ability to serve instances
 remotely as RPC services.
 
+*NOTE: Alar is primarily designed for [SFN](https://github.com/hyurl/sfn)*
+*framework.*
+
 ## Prerequisites
 
 - Node.js `v8.3.0+`
@@ -201,7 +204,8 @@ import { App } from "./app";
     service.register(app.services.user);
 
     // Access the instance in local style but actually remote.
-    let fullName = await app.services.user().getFullName("David");
+    // Since v6.0, the **route** argument for the module must be explicit.
+    let fullName = await app.services.user("route").getFullName("David");
     console.log(fullName); // David Wood
 })();
 ```
@@ -248,7 +252,7 @@ export default class UserService {
     // Whether calling the local instance or a remote instance, the following 
     // program produce the same result.
 
-    let generator = app.services.user().getFriends();
+    let generator = app.services.user("route").getFriends();
 
     for await (let name of generator) {
         console.log(name);
@@ -257,14 +261,8 @@ export default class UserService {
         // Albert
     }
 
-    // If want to get the returning value, just call await on the generator.
-    // NOTE: this syntax only works with Alar framework, don't use it with 
-    // general generators.
-    console.log(await generator); // We are buddies
-
-
     // The following usage gets the same result.
-    let generator2 = app.services.user().getFriends();
+    let generator2 = app.services.user("route").getFriends();
 
     while (true) {
         let { value, done } = await generator2.next();
@@ -327,13 +325,5 @@ export default class UserService {
     await server.init();
 })();
 ```
-
-## Dependency Injection
-
-History versions of Alar provides a way to inject a singleton into another
-module, however, after a long time practice, it turns out DI is not that
-practical and less often used in Alar framework, and it sometimes make the code
-even harder to be understood, so this feature is now (since v5.6) being
-deprecated.
 
 For more details, please check the [API documentation](./api.md).

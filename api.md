@@ -24,9 +24,10 @@ listed):
     will automatically calculate the `route` and direct the traffic to the 
     corresponding remote instance. If the given route matches the server ID of 
     any remote service, the corresponding instance will be returned instead.
-- `noLocal(): this` If the module is registered as remote service, however when 
-    no RPC channel is available, by default, `instance()` will fail to the local 
-    instance, using this method to disable the default behavior.
+- `fallbackToLocal(enable: boolean): this` If the module is registered as a
+    remote service, however none of the RPC channel is available, allow calls to
+    fallback to the local instance, which is the default behavior, this method
+    is used to disable (pass `false`) and re-enable (pass `true`) this behavior.
 
 **NOTE: RPC calling will serialized all input or output data, those data that**
 **cannot be serialized will be lost during transmission.**
@@ -48,6 +49,13 @@ listed):
 
 **CHANGE: Since v5.5, the module now can be called as a class constructor,**
 **and it acts just the same as calling `create()` function.**
+
+**CHANGE: Since v6.0 `noLocal()` method has be deprecated in favor of**
+**`fallbackToLocal(false)`.**
+
+**CHANGE: v6.0 fix the forced asynchronous behavior added in v5.0, now only**
+**remote calls and the calls fell back to local when remote unavailable are**
+**forced asynchronous.**
 
 # ModuleProxy (class)
 
@@ -137,12 +145,12 @@ json.setLoader({
 ## createModuleProxy
 
 ```ts
-export function createModuleProxy<T = any>(
+export function createModuleProxy(
     name: string,
     path: string,
     loader?: ModuleLoader,
     singletons?: { [name: string]: any }
-): ModuleProxy<T>
+): ModuleProxy
 ```
 
 Creates a module proxy manually. This function is used under the hood of Alar
