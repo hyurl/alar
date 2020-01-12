@@ -29,7 +29,7 @@ listed):
     fallback to the local instance, which is the default behavior, this method
     is used to disable (pass `false`) and re-enable (pass `true`) this behavior.
 
-**NOTE: RPC calling will serialized all input or output data, those data that**
+**NOTE: RPC calling will serialize all input and output data, those data that**
 **cannot be serialized will be lost during transmission.**
 
 **NOTE: properties cannot be accessed remotely, if trying so, `null` or**
@@ -41,7 +41,7 @@ listed):
 **asynchronous, regardless of local call or remote call.**
 
 **CHANGE: Since v5.0, a module class with parameters must use the signature**
-**`ModuleProxy<typeof T>` in order to provide correct type check for**
+**`ModuleProxy<typeof T>` in order to provide correct type hint for**
 **`create()` function.**
 
 **CHANGE: Since v5.4, the module now can be called as a function, and**
@@ -54,8 +54,7 @@ listed):
 **`fallbackToLocal(false)`.**
 
 **CHANGE: v6.0 fix the forced asynchronous behavior added in v5.0, now only**
-**remote calls and the calls fell back to local when remote unavailable are**
-**forced asynchronous.**
+**remote calls and the calls fell back to local are forced asynchronous.**
 
 # ModuleProxy (class)
 
@@ -154,8 +153,8 @@ export function createModuleProxy(
 ```
 
 Creates a module proxy manually. This function is used under the hood of Alar
-frame work, however, if you want to create a module proxy that is outside the
-root proxy, you can use this function to do so.
+framework, however, if you want to create a module proxy outside the root proxy,
+you can use this function to do so.
 
 ## RpcOptions
 
@@ -252,8 +251,8 @@ connection.
 
 ### About Reconnection
 
-When the client detected the server is down or malfunction, it will destroy the
-connection positively and retry connect. Since v4.0.0, this feature uses an
+When the client detects the server is down or malfunction, it will destroy the
+connection positively and retry connect. Since v5.4, this feature uses an
 exponential back-off mechanism to retry connect rapidly util about 30 minutes
 timeout before consider the server is down permanently, and will close the
 channel after that.
@@ -286,6 +285,6 @@ type Subscriber = (data: any) => void | Promise<void>;
 
 ## Pub-Sub Model between the server and clients
 
-When the server publish a message, all client subscribe to the topic
+When the server publishes a message, all clients subscribe to the topic
 will receive the data and invoke their handlers, this mechanism is often used
-for the server broadcasting data to connected clients.
+for the server to broadcast data to its clients.

@@ -29,8 +29,7 @@ wipe out the memory cache and reload the module with very few side-effects.
 
 In order to use Alar, one must create a root `ModuleProxy` instance, and assign
 it to the global scope, so other files can directly use it as a root namespace
-without import and share the benefits of declaration merging (in TypeScript
-vernacular).
+without importing the module.
 
 **NOTE: Since v5.5, Alar introduced two new syntaxes to get the singleton and**
 **create new instances of the module, they are more light-weight and elegant,**
@@ -42,7 +41,7 @@ vernacular).
 // src/app.ts
 import { ModuleProxy } from "alar";
 
-// Expose and merge the app as a namespace under the global namespace.
+// Expose and merge the app as a namespace under the global scope.
 declare global {
     namespace app { }
 }
@@ -55,10 +54,10 @@ App.watch();
 ```
 
 In other files, just define and export a default class, and merge the type to 
-the namespace `app`, so that another file can access it directly as namespace.
+the namespace `app`, so that another file can access it directly via namespace.
 
 (NOTE: Alar offers first priority of the `default` export, if a module doesn't 
-have default export, Alar will try to load the entire exports object instead.)
+have default export, Alar will try to load all exports instead.)
 
 ```typescript
 // Be aware that the namespace must be corresponded to the filename.
@@ -158,7 +157,8 @@ declare global {
     }
 }
 
-// It is recommended using non-parameter constructor.
+// It is recommended not to define the constructor and use a non-parameter
+// constructor.
 export default class UserService {
     private users: { firstName: string, lastName: string }[] = [
         { firstName: "David", lastName: "Wood" },
@@ -203,7 +203,7 @@ import { App } from "./app";
 
     service.register(app.services.user);
 
-    // Access the instance in local style but actually remote.
+    // Accessing the instance in local style but actually calling remote.
     // Since v6.0, the **route** argument for the module must be explicit.
     let fullName = await app.services.user("route").getFullName("David");
     console.log(fullName); // David Wood
@@ -212,10 +212,10 @@ import { App } from "./app";
 
 ### Hot-reloading in Remote Service
 
-The local watcher may notice the local file has changed and try to reload the 
-local module (and the local singleton), however, it will not affect any remote 
-instances, that said, the instance served remotely can still be watched and 
-reloaded on the remote server individually.
+The local watcher may notice the local file has been changed and try to reload
+the local module (and the local singleton), however, it will not affect any
+remote instances, that said, the instance served remotely can still be watched
+and reloaded on the remote server individually.
 
 In the above example, since the **remote-service.ts** module imports **app.ts**
 module as well, which starts the watcher, when the **user.ts** module is changed,
