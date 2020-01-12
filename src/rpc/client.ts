@@ -189,14 +189,16 @@ export class RpcClient extends RpcChannel implements ClientOptions {
     }
 
     register<T>(mod: ModuleProxy<T>) {
-        this.registry[mod.name] = mod;
-        let singletons = (<ModuleProxyBase><any>mod)["remoteSingletons"];
+        if (!this.registry[mod.name]) {
+            this.registry[mod.name] = mod;
+            let singletons = (<ModuleProxyBase><any>mod)["remoteSingletons"];
 
-        singletons[this.serverId] = createRemoteInstance(
-            mod,
-            (prop) => this.createFunction(<ModuleProxyBase><any>mod, prop)
-        );
-        singletons[this.serverId][readyState] = this.connected ? 2 : 0;
+            singletons[this.serverId] = createRemoteInstance(
+                mod,
+                (prop) => this.createFunction(<ModuleProxyBase><any>mod, prop)
+            );
+            singletons[this.serverId][readyState] = this.connected ? 2 : 0;
+        }
 
         return this;
     }
@@ -321,6 +323,17 @@ export class RpcClient extends RpcChannel implements ClientOptions {
 
             switch (event) {
                 case RpcEvents.CONNECT:
+                    // Update remote singletons map.
+                    for (let name in this.registry) {
+                        let mod: ModuleProxyBase = <any>this.registry[name];
+                        let singletons = mod["remoteSingletons"];
+
+                        if (singletons[this.serverId]) {
+                            singletons[data] = singletons[this.serverId];
+                            delete singletons[this.serverId];
+                        }
+                    }
+
                     this.serverId = data;
                     this.finishConnect();
                     break;

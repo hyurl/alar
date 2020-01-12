@@ -51,6 +51,7 @@ export function createModuleProxy(
     Object.setPrototypeOf(proxy, ModuleProxy.prototype);
     set(proxy, "name", name);
     patchProperties(<any>proxy, path, loader, singletons);
+    proxy[fallbackToLocal] = true;
 
     return <any>applyMagic(proxy, true);
 }
@@ -64,7 +65,6 @@ export abstract class ModuleProxy extends Injectable {
     protected children: { [name: string]: ModuleProxy };
     protected singletons: { [name: string]: any };
     protected remoteSingletons: { [serverId: string]: any };
-    protected [fallbackToLocal] = true;
 
     get exports(): any {
         if (typeof this.loader.extension === "string") {

@@ -38,7 +38,6 @@ export class ModuleProxy extends ModuleProxyBase {
      */
     readonly local: symbol;
     private server: RpcServer = null;
-    private client: RpcClient = null;
 
     constructor(readonly name: string, path: string, loader?: ModuleLoader) {
         super();
@@ -55,8 +54,7 @@ export class ModuleProxy extends ModuleProxyBase {
 
     /** Connects an RPC service according to the given configuration. */
     connect(config: string | ClientOptions): Promise<RpcClient> {
-        this.client = new RpcClient(<any>config);
-        return this.client.open();
+        return new RpcClient(<any>config).open();
     }
 
     /** Resolves the given path to a module name. */

@@ -210,7 +210,8 @@ The following properties and methods work in both implementations:
 - `id: string` The unique ID of the server or the client.
 - `dsn: string` Gets the data source name according to the configuration.
 - `open(): Promise<this>` Opens the channel. This method is internally called by
-    `ModuleProxy.serve()` and `ModuleProxy.connect()`, you don't have to call it.
+    `ModuleProxy.serve()` and `ModuleProxy.connect()`, normally, you don't have
+    to call it explicitly.
 - `close(): Promise<this>` Closes the channel.
 - `register<T>(mod: ModuleProxy<T>): this` Registers a module to the channel.
 - `onError(handler: (err: Error) => void)` Binds an error handler invoked 
