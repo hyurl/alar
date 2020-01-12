@@ -40,11 +40,11 @@ export function createModuleProxy(
     loader = defaultLoader,
     singletons = dict()
 ): ModuleProxy {
-    let proxy = function (route: any = void 0) {
+    let proxy = function (...args: any[]) {
         if (!new.target) {
-            return (<any>proxy).instance(route);
+            return (<any>proxy).instance(args[0]);
         } else {
-            return (<any>proxy).create(route);
+            return (<any>proxy).create(...args);
         }
     };
 
