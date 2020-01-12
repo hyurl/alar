@@ -19,6 +19,10 @@ declare global {
     type Voidable<T> = { [K in keyof T]: T[K] | void }
     type EnsureInstanceType<T> = T extends new (...args: any[]) => infer R ? R : T;
 
+    /**
+     * @deprecated In experience, this interface is very unlikely to be used by
+     *  users, it will be removed in the next release.
+     */
     interface ModuleConstructor<T> {
         new(...args: any[]): T;
         getInstance?(): T;
@@ -39,7 +43,7 @@ declare global {
         /** The very prototype of the module. */
         readonly proto: EnsureInstanceType<T>;
         /** The very class constructor of the module. */
-        readonly ctor: ModuleConstructor<EnsureInstanceType<T>>;
+        readonly ctor: T extends Function ? T : ModuleConstructor<EnsureInstanceType<T>>;
 
         /** Creates a new instance of the module. */
         create(...args: T extends new (...args: infer A) => any ? A : any[]): EnsureInstanceType<T>;
@@ -56,13 +60,15 @@ declare global {
         /**
          * Allowing the current module to be injected as a dependency bound to a
          * property of another class instance.
+         * 
+         * @deprecated
          */
         inject(route?: any): PropertyDecorator;
 
         /**
          * If the module is registered as remote service, however when no RPC 
-         * channel is available, by default, `instance()` will fail to the local
-         * instance, using this method to disable the default behavior.
+         * channel is available, by default, singleton instance will fail to the
+         * local instance, using this method to disable the default behavior.
          */
         noLocal(): this;
     }

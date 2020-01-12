@@ -166,10 +166,6 @@ export abstract class ModuleProxy<T = any> extends Injectable implements ModuleP
         }
     }
 
-    remote(route: any = "") {
-        return this.instance(route);
-    }
-
     noLocal(): this {
         this[noLocal] = true;
         return this;

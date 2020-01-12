@@ -307,7 +307,7 @@ describe("Alar ModuleProxy", () => {
         assert.ok(err instanceof ReferenceError);
     });
 
-    it("should subscribe and publish an event as expected", async () => {
+    it("should subscribe and publish an topic as expected", async () => {
         let server = await App.serve(config);
         let client = await App.connect(config);
         let data;
@@ -328,7 +328,7 @@ describe("Alar ModuleProxy", () => {
         await server.close();
     });
 
-    it("should subscribe and publish multiple events as expected", async () => {
+    it("should subscribe and publish multiple topics as expected", async () => {
         let server = await App.serve(config);
         let client = await App.connect(config);
         let data;
@@ -358,31 +358,31 @@ describe("Alar ModuleProxy", () => {
         await server.close();
     });
 
-    it("should unsubscribe event handles as expected", async () => {
+    it("should unsubscribe topic handlers as expected", async () => {
         let server = await App.serve(config);
         let client = await App.connect(config);
-        let listner = () => null;
-        let listner2 = () => null;
+        let listener = () => null;
+        let listener2 = () => null;
 
-        client.subscribe("set-data", listner)
-            .subscribe("set-data", listner2)
-            .subscribe("set-data-2", listner)
-            .subscribe("set-data-2", listner2)
+        client.subscribe("set-data", listener)
+            .subscribe("set-data", listener2)
+            .subscribe("set-data-2", listener)
+            .subscribe("set-data-2", listener2)
 
-        client.unsubscribe("set-data", listner);
+        client.unsubscribe("set-data", listener);
         client.unsubscribe("set-data-2");
 
-        assert(client["events"] instanceof Map);
-        assert(client["events"].size === 1);
-        assert(client["events"].get("set-data") instanceof Set);
-        assert(client["events"].get("set-data").size === 1);
-        assert(client["events"].get("set-data").has(listner2));
+        assert(client["topics"] instanceof Map);
+        assert(client["topics"].size === 1);
+        assert(client["topics"].get("set-data") instanceof Set);
+        assert(client["topics"].get("set-data").size === 1);
+        assert(client["topics"].get("set-data").has(listener2));
 
         await client.close();
         await server.close();
     });
 
-    it("should publish an event to specified clients as expected", async () => {
+    it("should publish an topic to specified clients as expected", async () => {
         let server = await App.serve(config);
         let client = await App.connect(Object.assign({}, config, { id: "abc" }));
         let data;

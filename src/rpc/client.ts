@@ -20,7 +20,7 @@ export interface ClientOptions extends RpcOptions {
 }
 
 export class RpcClient extends RpcChannel implements ClientOptions {
-    /** The unique ID of the client, used for the server publishing events. */
+    /** The unique ID of the client, used for the server publishing topics. */
     readonly id: string;
     readonly timeout: number;
     readonly pingInterval: number;
@@ -30,7 +30,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
     protected registry: { [name: string]: ModuleProxy<any> } = dict();
     protected taskId = sequid(0, true);
     protected tasks = new Map<number, Task>();
-    protected events = new Map<string, Set<Subscriber>>();
+    protected topics = new Map<string, Set<Subscriber>>();
     protected finishConnect: Function = null;
     private lastActiveTime: number = Date.now();
     protected selfDestruction: NodeJS.Timer = null;
@@ -227,36 +227,33 @@ export class RpcClient extends RpcChannel implements ClientOptions {
         return success;
     }
 
-    /** Subscribes a listener function to the corresponding event. */
-    subscribe(event: string, listener: Subscriber) {
-        let listeners = this.events.get(event);
-
-        if (!listeners) {
-            this.events.set(event, listeners = new Set());
-        }
-
-        listeners.add(listener);
+    /** Subscribes a handle function to the corresponding topic. */
+    subscribe(topic: string, handle: Subscriber) {
+        let handlers = this.topics.get(topic);
+        handlers || this.topics.set(topic, handlers = new Set());
+        handlers.add(handle);
         return this;
     }
 
     /**
-     * Unsubscribes the `listener` or all listeners from the corresponding event.
+     * Unsubscribes the handle function or all handlers from the corresponding
+     * topic.
      */
-    unsubscribe(event: string, listener?: Subscriber) {
-        if (!listener) {
-            return this.events.delete(event);
+    unsubscribe(topic: string, handle?: Subscriber) {
+        if (!handle) {
+            return this.topics.delete(topic);
         } else {
-            let listeners = this.events.get(event);
+            let handlers = this.topics.get(topic);
 
-            if (listeners) {
-                return listeners.delete(listener);
+            if (handlers) {
+                return handlers.delete(handle);
             } else {
                 return false;
             }
         }
     }
 
-    send(...data: Request) {
+    protected send(...data: Request) {
         if (this.socket && !this.socket.destroyed && this.socket.writable) {
             // If the last argument in the data is undefined, do not send it.
             if (data[data.length - 1] === undefined) {
@@ -326,13 +323,17 @@ export class RpcClient extends RpcChannel implements ClientOptions {
 
                 case RpcEvents.BROADCAST:
                     // If receives the broadcast event, call all the 
-                    // listeners bound to the corresponding event. 
-                    let listeners = this.events.get(<string>taskId);
+                    // handlers bound to the corresponding topic. 
+                    let handlers = this.topics.get(<string>taskId);
 
-                    if (listeners) {
-                        for (let handle of listeners) {
-                            await handle(data);
-                        }
+                    if (handlers) {
+                        handlers.forEach(async (handle) => {
+                            try {
+                                await handle(data);
+                            } catch (err) {
+                                this.errorHandler && this.errorHandler(err);
+                            }
+                        });
                     }
                     break;
 
@@ -527,7 +528,7 @@ class ThenableIteratorProxy implements ThenableAsyncGeneratorLike {
                 // If in a generator call and the generator hasn't been 
                 // initiated, send the request with arguments for initiation on
                 // the server.
-                this.client.send(
+                this.client["send"](
                     event,
                     this.taskId,
                     this.modname,
@@ -536,7 +537,7 @@ class ThenableIteratorProxy implements ThenableAsyncGeneratorLike {
                     ...args
                 );
             } else {
-                this.client.send(
+                this.client["send"](
                     event,
                     this.taskId,
                     this.modname,

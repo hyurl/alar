@@ -1,3 +1,6 @@
+// NOTE: Dependency Injection is marked deprecated since v5.6, and very likely
+// to be removed in the next release.
+
 import { dict } from './util';
 
 const dependencies = Symbol("dependencies");
@@ -13,7 +16,7 @@ function defineAccessor(target: any, prop: string): void {
         enumerable: false,
         get(this: any) {
             let { module, route } = <Dependency>this[dependencies][prop];
-            return module.instance(route);
+            return module(route);
         }
     });
 }
@@ -30,6 +33,9 @@ function addDependency(dependency: Dependency) {
     };
 }
 
+/**
+ * @deprecated
+ */
 export abstract class Injectable {
     inject(this: ModuleProxy<any>, route: any = ""): PropertyDecorator {
         return addDependency({

@@ -109,18 +109,17 @@ export class RpcServer extends RpcChannel {
     }
 
     /**
-     * Publishes data to the corresponding event, if `clients` are provided, the
-     * event will only be emitted to them.
-     * 
+     * Publishes data to the corresponding topic, if `clients` are provided, the
+     * topic will only be published to them.
      */
-    publish(event: string, data: any, clients?: string[]) {
+    publish(topic: string, data: any, clients?: string[]) {
         let sent = false;
         let socket: net.Socket;
         let targets = clients || this.clients.keys();
 
         for (let id of targets) {
             if (socket = this.clients.get(id)) {
-                this.dispatch(socket, RpcEvents.BROADCAST, event, data);
+                this.dispatch(socket, RpcEvents.BROADCAST, topic, data);
                 sent = true;
             }
         }
@@ -219,7 +218,7 @@ export class RpcServer extends RpcChannel {
                             try {
                                 // Connect to the singleton instance and 
                                 // invokes it's method to handle the request.
-                                let ins = this.registry[modname].instance(local);
+                                let ins = this.registry[modname](local);
                                 let task = ins[method].apply(ins, args);
 
                                 if (task && isIteratorLike(task[source])) {

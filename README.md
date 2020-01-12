@@ -11,25 +11,27 @@ remotely as RPC services.
 ## Auto-loading and Hot-reloading
 
 In NodeJS (with CommonJS module solution), `require` and `import` will 
-immediately load the corresponding module and make a reference *"copy"* in the 
-current scope. Which means, if the module doesn't finish initiation, e.g. 
-circular import, the application may not work as expected, and if the module 
-file is modified, the application won't be able to reload that module without 
-restart the program.
+immediately load the corresponding module and make a reference in the current
+scope. Which means, if the module doesn't finish initiation, e.g. circular
+import, the application may not work as expected. And if the module file is
+modified, the application won't be able to reload that module without restart
+the program.
 
 Alar, on the other hand, based on namespace and ES6 proxy, it creates a 
-weak-reference of the module, and only import the module when needed. And since 
-it's weak-referenced, it will not make any copy to the module, and when the 
-module file is changed, it can wipe out the memory cache and reload the module 
-with very few side-effects.
+*"soft-link"* of the module, and only import the module when truly needed. And
+since  it's soft-linked, when the module file is changed, it has the ability to
+wipe out the memory cache and reload the module with very few side-effects.
 
 ### How to use?
 
 In order to use Alar, one must create a root `ModuleProxy` instance, and assign
-it to the global namespace, so other files can directly use it as a root
-namespace without import and share the benefits of declaration merging (in
-TypeScript vernacular, if not using is, just ignore any tips and code of
-declaration merging that may be discussed).
+it to the global scope, so other files can directly use it as a root namespace
+without import and share the benefits of declaration merging (in TypeScript
+vernacular).
+
+**NOTE: Since v5.5, Alar introduced two new syntaxes to get the singleton and**
+**create new instances of the module, they are more light-weight and elegant,**
+**so this document will in favor of them, although the old style still works.**
 
 ### Example
 
@@ -56,6 +58,8 @@ the namespace `app`, so that another file can access it directly as namespace.
 have default export, Alar will try to load the entire exports object instead.)
 
 ```typescript
+// Be aware that the namespace must be corresponded to the filename.
+
 // src/bootstrap.ts
 declare global {
     namespace app {
@@ -71,11 +75,10 @@ export default class Bootstrap {
 ```
 
 ```typescript
-// src/service/user.ts
-// The namespace must correspond to the filename.
+// src/models/user.ts
 declare global {
     namespace app {
-        namespace service {
+        namespace models {
             // Since v5.0, a module class with parameters must use the signature
             // `typeof T`.
             const user: ModuleProxy<typeof User>
@@ -98,19 +101,11 @@ And other files can access to the modules via the namespace:
 // src/index.ts
 import "./app";
 
-// The instance() method will link to the singleton instance of the module.
-app.bootstrap.instance().init();
-
-// Since v5.4, calling instance() is optional, you can call the module proxy
-// as a function directly. So this is equivalent to the above one:
+// Calling the module as a function will link to the singleton of the module.
 app.bootstrap().init();
 
-// The create() method will create a new instance.
-var user = app.service.user.create("Mr. Handsome");
-
-// Since v5.5, calling create() is optional, you can call the module proxy
-// as a class directly. So this is equivalent to the above one:
-var user = new app.service.user("Mr. Handsome");
+// Using `new` syntax on the module to create a new instance.
+var user = new app.models.user("Mr. Handsome");
 
 console.log(user.getName()); // Mr. Handsome
 ```
@@ -118,10 +113,10 @@ console.log(user.getName()); // Mr. Handsome
 ### Prototype Module
 
 Any module that exports an object as default will be considered as a prototype 
-module, when calling `create()` of that module, the object will be used as a 
+module, when create a new instance of that module, the object will be used as a 
 prototype (since v4.0.4, a deep clone will be used instead, if an argument is
-passed, it will be merged to the new object). However when calling `instance()`
-of that module, the original object itself will be used as the singleton.
+passed, it will be merged to the new object). However when calling the singleton
+of that module, the original object itself will be returned.
 
 ```typescript
 // src/config.ts
@@ -142,35 +137,38 @@ export default <Config>{
 
 ## Remote Service
 
-Alar allows user to easily serve the module remotely, whether in another 
+Alar allows user to easily serve a module remotely, whether in another 
 process or in another machine.
 
 ### Example
 
-Say I want to serve the user service in a different process and communicate via
+Say I want to serve a user service in a different process and communicate via
 IPC channel, I just have to do this:
 
 ```typescript
-// src/service/user.ts
+// src/services/user.ts
 declare global {
     namespace app {
-        namespace service {
-            const user: ModuleProxy<typeof User>
+        namespace services {
+            const user: ModuleProxy<typeof UserService>
         }
     }
 }
 
-export default class User {
-    constructor(private name?: string) {}
+// It is recommended using non-parameter constructor.
+export default class UserService {
+    private users: { firstName: string, lastName: string }[] = [
+        { firstName: "David", lastName: "Wood" },
+        // ...
+    ];
 
     // Any method that will potentially be called remotely should be async.
-    async getName() {
-        return this.name;
-    }
+    async getFullName(firstName: string) {
+        let user = this.users.find(user => {
+            return user.firstName === firstName;
+        });
 
-    // Static method getInstance() is used to create the singleton instance.
-    static getInstance() {
-        return new this("Mr. Handsome");
+        return user ? `${firstName} ${user.lastName}` : void 0;
     }
 }
 ```
@@ -182,7 +180,7 @@ import { App } from "./app";
 (async () => {
     let service = await App.serve("/tmp/my-app/remote-service.sock");
 
-    service.register(app.service.user);
+    service.register(app.services.user);
 
     console.log("Service started!");
 })();
@@ -200,10 +198,11 @@ import { App } from "./app";
 (async () => {
     let service = await App.connect("/tmp/my-app/remote-service.sock");
 
-    service.register(app.service.user);
+    service.register(app.services.user);
 
     // Access the instance in local style but actually remote.
-    console.log(await app.service.user.instance().getName()); // Mr. Handsome
+    let fullName = await app.services.user().getFullName("David");
+    console.log(fullName); // David Wood
 })();
 ```
 
@@ -214,10 +213,10 @@ local module (and the local singleton), however, it will not affect any remote
 instances, that said, the instance served remotely can still be watched and 
 reloaded on the remote server individually.
 
-In the above example, since the `remote-service` module imports `app` module as 
-well, which starts the watcher, when the `user` module is changed, the 
-`remote-service` will reload the module as expected, and the `index` calls it 
-remotely will get the new result as expected.
+In the above example, since the **remote-service.ts** module imports **app.ts**
+module as well, which starts the watcher, when the **user.ts** module is changed,
+the **remote-service.ts** will reload the module as expected, and the
+**index.ts** calls it remotely will get the new result as expected.
 
 ## Generator Support
 
@@ -225,16 +224,16 @@ Since version 3.3, Alar supports generators (and async generators) in both local
 call and remote call contexts.
 
 ```typescript
-// src/service/user.ts
+// src/services/user.ts
 declare global {
     namespace app {
-        namespace service {
-            const user: ModuleProxy<User>
+        namespace services {
+            const user: ModuleProxy<UserService>
         }
     }
 }
 
-export default class User {
+export default class UserService {
     // ...
     async *getFriends() {
         yield "Jane";
@@ -246,10 +245,10 @@ export default class User {
 
 // index.ts
 (async () => {
-    // Whther calling the local instance or a remote instance, the following 
+    // Whether calling the local instance or a remote instance, the following 
     // program produce the same result.
 
-    let generator = app.service.user.instance().getFriends();
+    let generator = app.services.user().getFriends();
 
     for await (let name of generator) {
         console.log(name);
@@ -263,9 +262,9 @@ export default class User {
     // general generators.
     console.log(await generator); // We are buddies
 
-    // The following usage gets the same result.
 
-    let generator2 = app.service.user.instance().getFriends();
+    // The following usage gets the same result.
+    let generator2 = app.services.user().getFriends();
 
     while (true) {
         let { value, done } = await generator2.next();
@@ -286,46 +285,6 @@ export default class User {
 })();
 ```
 
-## Dependency Injection
-
-Since 3.5.0, Alar add a new method `inject(route?: any)` to allow you setting up
-dependency for a specific class in a handy way, check this example:
-
-```typescript
-class Article {
-    @app.service.user.inject()
-    protected user: User;
-
-    getAuthorName(): Promise<string> {
-        return this.user.getName();
-    }
-}
-
-(async () => {
-    var article = new Article;
-    console.log(await article.getAuthorName());
-})();
-```
-
-Be noticed that this method differs from the usage of assigning the instance to
-an variable, if you use the syntax below to add the instance to a class property,
-it will break the hot-reloading feature that Alar provided.
-
-```typescript
-class Article {
-    protected user = app.services.user.instance(); // DON't do this
-}
-```
-
-This syntax will make a strong reference to the user module, which will not
-allow the program to refer to the new instance after reloading the user module.
-But, when using the `inject()` method, which ships with `instance()` under the
-hood, the hot-reloading model will still work fine.
-
-However, Alar doesn't provide a way to inject new instances dynamically, since
-every new instance will create a strong reference itself, that makes that kind
-of injection less useful.
-
 ## Life Cycle Support
 
 Since 5.0, Alar now supports life cycle functions, if a service class contains
@@ -342,16 +301,16 @@ would be a slight downtime during hot-reloading, and any call would fail until
 the service is re-available again.
 
 ```ts
-// src/service/user.ts
+// src/services/user.ts
 declare global {
     namespace app {
-        namespace service {
-            const user: ModuleProxy<User>
+        namespace services {
+            const user: ModuleProxy<UserService>
         }
     }
 }
 
-export default class User {
+export default class UserService {
     async init() {
         // ...
     }
@@ -368,5 +327,13 @@ export default class User {
     await server.init();
 })();
 ```
+
+## Dependency Injection
+
+History versions of Alar provides a way to inject a singleton into another
+module, however, after a long time practice, it turns out DI is not that
+practical and less often used in Alar framework, and it sometimes make the code
+even harder to be understood, so this feature is now (since v5.6) being
+deprecated.
 
 For more details, please check the [API documentation](./api.md).
