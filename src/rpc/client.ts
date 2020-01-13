@@ -323,14 +323,16 @@ export class RpcClient extends RpcChannel implements ClientOptions {
 
             switch (event) {
                 case RpcEvents.CONNECT:
-                    // Update remote singletons map.
-                    for (let name in this.registry) {
-                        let mod: ModuleProxyBase = <any>this.registry[name];
-                        let singletons = mod["remoteSingletons"];
+                    if (data !== this.serverId) { // only for fresh connect
+                        // Update remote singletons map.
+                        for (let name in this.registry) {
+                            let mod: ModuleProxyBase = <any>this.registry[name];
+                            let singletons = mod["remoteSingletons"];
 
-                        if (singletons[this.serverId]) {
-                            singletons[data] = singletons[this.serverId];
-                            delete singletons[this.serverId];
+                            if (singletons[this.serverId]) {
+                                singletons[data] = singletons[this.serverId];
+                                delete singletons[this.serverId];
+                            }
                         }
                     }
 

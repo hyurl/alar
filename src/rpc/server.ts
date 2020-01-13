@@ -37,14 +37,27 @@ export class RpcServer extends RpcChannel {
         this.id = this.id || this.dsn;
     }
 
-    open(): Promise<this> {
+    /**
+     * @param enableLifeCycle default value: `true`
+     */
+    open(enableLifeCycle = true): Promise<this> {
         return new Promise(async (resolve, reject) => {
             let server: net.Server = this.server = net.createServer();
             let listener = () => {
-                resolve(this);
-                server.on("error", err => {
+                let handlerError = (err: Error) => {
                     this.errorHandler && this.errorHandler.call(this, err);
-                });
+                };
+
+                resolve(this);
+                server.on("error", handlerError);
+
+                if (enableLifeCycle) {
+                    this.enableLifeCycle = true;
+                    for (let name in this.registry) {
+                        let mod = this.registry[name];
+                        tryLifeCycleFunction(mod, "init").catch(handlerError);
+                    }
+                }
             };
 
             if (this.path) {// server IPC (Unix domain socket/Windows named pipe)
@@ -90,7 +103,10 @@ export class RpcServer extends RpcChannel {
 
         if (this.enableLifeCycle) {
             for (let name in this.registry) {
-                await tryLifeCycleFunction(this.registry[name], "destroy");
+                let mod = this.registry[name];
+                tryLifeCycleFunction(mod, "destroy").catch(err => {
+                    this.errorHandler && this.errorHandler(err);
+                });
             }
         }
 
@@ -105,15 +121,6 @@ export class RpcServer extends RpcChannel {
     register<T>(mod: ModuleProxy<T>) {
         this.registry[mod.name] = mod;
         return this;
-    }
-
-    /** Performs initiation processes for registered modules. */
-    async init() {
-        this.enableLifeCycle = true;
-
-        for (let name in this.registry) {
-            await tryLifeCycleFunction(this.registry[name], "init");
-        }
     }
 
     /**

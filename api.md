@@ -86,10 +86,18 @@ This class has the following extra properties and methods:
 
 - `local: symbol` If passed to the `ModuleProxy<T>.instance()`, the method will 
     always return the local instance.
-- `serve(config: string | RpcOptions): Promise<RpcServer>` Serves an RPC 
-    service according to the given configuration.
-- `connect(config: string | ClientOptions): Promise<RpcClient>` Connects an RPC 
-    service according to the given configuration.
+- `serve(config: string | RpcOptions, immediate?: boolean): Promise<RpcServer>`
+    Serves an RPC service according to the given configuration. `immediate` sets
+    whether to open the channel immediately after create the server, it's set
+    `true` by default. However, if you want to do some preparations and register
+    modules before serving, set it to `false`, and call `RpcServer.open()`
+    manually.
+- `connect(config: string | ClientOptions, immediate?: boolean): Promise<RpcClient>`
+    Connects an RPC service according to the given configuration. `immediate`
+    sets whether to open the channel immediately after create the client, it's
+    set `true` by default. However, if you want to do some preparations and
+    register modules before connecting, set it to `false`, and call
+    `RpcClient.open()` manually.
 - `resolve(path: string): string` Resolves the given path to a module name.
 - `watch(listener?: (event: "change" | "unlink", filename: string)): FSWatcher` 
     Watches file change and reload the corresponding module.
@@ -102,6 +110,9 @@ This class has the following extra properties and methods:
 
 **CHANGE: Since v5.4, class `ModuleProxy` now takes a third optional parameter**
 **to set the loader when instantiating.**
+
+**CHANGE: Since v6.0, `ModuleProxy.serve()` and `ModuleProxy.connect()` now**
+**take a second argument to suggest whether the channel should open immediately.**
 
 ## ModuleLoader
 
@@ -209,9 +220,9 @@ The following properties and methods work in both implementations:
 
 - `id: string` The unique ID of the server or the client.
 - `dsn: string` Gets the data source name according to the configuration.
-- `open(): Promise<this>` Opens the channel. This method is internally called by
-    `ModuleProxy.serve()` and `ModuleProxy.connect()`, normally, you don't have
-    to call it explicitly.
+- `open(): Promise<this>` Opens the channel. This method will be called
+    automatically by `ModuleProxy.serve()` and `ModuleProxy.connect()` if their
+    `immediate` argument is set `true`.
 - `close(): Promise<this>` Closes the channel.
 - `register<T>(mod: ModuleProxy<T>): this` Registers a module to the channel.
 - `onError(handler: (err: Error) => void)` Binds an error handler invoked 
@@ -226,12 +237,15 @@ class RpcServer extends RpcChannel { }
 
 The server implementation of the RPC channel.
 
-- `init(): Promise<void>` Performs initiation processes for registered modules.
 - `publish(topic: string, data: any, clients?: string[]): boolean` Publishes 
     data to the corresponding topic, if `clients` are provided, the topic will 
     only be published to them.
 - `getClients(): string[]` Returns all IDs of clients that connected to the 
     server.
+
+**CHANGE: Prior to v6.0, RpcServer.init() is used to perform initiation for**
+**registered modules, now the initiation process has been merged to**
+**`RpcServer.open()`.**
 
 ## ClientOptions
 

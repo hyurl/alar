@@ -46,15 +46,18 @@ export class ModuleProxy extends ModuleProxyBase {
     }
 
     /** Serves an RPC service according to the given configuration. */
-    serve(config: string | RpcOptions): Promise<RpcServer> {
+    async serve(config: string | RpcOptions, immediate = true) {
         this.server = new RpcServer(<any>config);
         this.server["proxyRoot"] = this;
-        return this.server.open();
+        immediate && (await this.server.open(false));
+        return this.server;
     }
 
     /** Connects an RPC service according to the given configuration. */
-    connect(config: string | ClientOptions): Promise<RpcClient> {
-        return new RpcClient(<any>config).open();
+    async connect(config: string | ClientOptions, immediate = true) {
+        let client = new RpcClient(<any>config);
+        immediate && (await client.open());
+        return client;
     }
 
     /** Resolves the given path to a module name. */

@@ -285,18 +285,25 @@ export default class UserService {
 
 ## Life Cycle Support
 
-Since 5.0, Alar now supports life cycle functions, if a service class contains
-an `init()` method, it will be used to perform asynchronous initiation, for
-example, connecting to a database. And if it contains a `destroy()` method, it
-will be used to perform asynchronous destruction, to release resources.
+Since v6.0, Alar provides a new way to support life cycle functions, it will be
+used to perform asynchronous initiation, for example, connecting to a database.
+And if it contains a `destroy()` method, it will be used to perform asynchronous
+destruction, to release resources.
 
-To enable this feature, after all needed modules are registered (and any other
-preparations are done), call the `RpcServer.init()` method to perform
-initiation process for every registered module.
+To enable this feature, first calling `ModuleProxy.serve()` method to create an
+RPC server that is not yet served immediately by passing the second argument
+`false`, and after all preparations are finished, calling the `RpcServer.open()`
+method to open the channel and initiate bound modules.
 
 This feature will still work after hot-reloaded the module. However, there
 would be a slight downtime during hot-reloading, and any call would fail until
 the service is re-available again.
+
+NOTE: Life cycle functions are only triggered when serving the module as an RPC
+service, and they will not be triggered for local backups. That means, allowing
+to fall back to local instance may cause some problems, since they haven't
+performed any initiations. To prevent expected behavior, it would better to
+disable the local version of the service by calling `fallbackToLocal(false)`.
 
 ```ts
 // src/services/user.ts
@@ -320,9 +327,13 @@ export default class UserService {
 
 
 (async () => {
-    server.register(app.services.user);
+    let service = App.serve(config, false); // pass false to serve()
 
-    await server.init();
+    service.register(app.services.user);
+
+    // other preparations...
+
+    await service.open();
 })();
 ```
 

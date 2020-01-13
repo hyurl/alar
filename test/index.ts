@@ -662,10 +662,10 @@ describe("Alar ModuleProxy", () => {
     /////////////////////// Life Cycle Support /////////////////////////////////
 
     it("should trigger life cycle functions as expected", async () => {
-        let server = await App.serve(config);
+        let server = await App.serve(config, false);
 
         server.register(app.service.user);
-        await server.init();
+        await server.open();
 
         assert.strictEqual(app.service.user().getName(), "Mr. Handsome");
 
