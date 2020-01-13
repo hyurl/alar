@@ -4,11 +4,18 @@ import * as fs from "fs-extra";
 import { clone } from '@hyurl/structured-clone';
 import { BiMap } from "advanced-collections";
 import { isIteratorLike } from "check-iterable";
-import { source, ThenableAsyncGenerator } from "thenable-generator";
+import { ThenableAsyncGenerator } from "thenable-generator";
 import isSocketResetError = require("is-socket-reset-error");
 import { RpcChannel, RpcEvents, Request, RpcOptions } from "./channel";
-import { absPath, local, RpcState, tryLifeCycleFunction, dict } from "../util";
-import { ModuleProxy as ModuleProxyBase } from '../proxy';
+import { ModuleProxy as ModuleProxyRoot } from "..";
+import {
+    dict,
+    absPath,
+    readyState,
+    tryLifeCycleFunction,
+    throwNotAvailableError,
+    isOwnKey,
+} from "../util";
 
 const authorized = Symbol("authorized");
 
@@ -19,6 +26,8 @@ export class RpcServer extends RpcChannel {
     protected registry: { [name: string]: ModuleProxy<any> } = dict();
     protected clients = new BiMap<string, net.Socket>();
     protected suspendedTasks = new Map<net.Socket, Map<number, ThenableAsyncGenerator>>();
+    protected proxyRoot: ModuleProxyRoot = null;
+    protected enableLifeCycle = false;
 
     constructor(path: string);
     constructor(port: number, host?: string);
@@ -28,17 +37,30 @@ export class RpcServer extends RpcChannel {
         this.id = this.id || this.dsn;
     }
 
-    open(): Promise<this> {
+    /**
+     * @param enableLifeCycle default value: `true`
+     */
+    open(enableLifeCycle = true): Promise<this> {
         return new Promise(async (resolve, reject) => {
             let server: net.Server = this.server = net.createServer();
             let listener = () => {
-                resolve(this);
-                server.on("error", err => {
+                let handlerError = (err: Error) => {
                     this.errorHandler && this.errorHandler.call(this, err);
-                });
+                };
+
+                resolve(this);
+                server.on("error", handlerError);
+
+                if (enableLifeCycle) {
+                    this.enableLifeCycle = true;
+                    for (let name in this.registry) {
+                        let mod = this.registry[name];
+                        tryLifeCycleFunction(mod, "init").catch(handlerError);
+                    }
+                }
             };
 
-            if (this.path) { // server IPC (Unix domain socket or Windows named pipe)
+            if (this.path) {// server IPC (Unix domain socket/Windows named pipe)
                 await fs.ensureDir(path.dirname(this.path));
 
                 // If the path exists, it's more likely caused by a previous 
@@ -79,14 +101,18 @@ export class RpcServer extends RpcChannel {
             }
         });
 
-        for (let name in this.registry) {
-            let mod = <ModuleProxy<any> & ModuleProxyBase>this.registry[name];
-
-            if (mod[RpcState] && mod["singletons"][mod.name]) {
-                mod[RpcState] = 2;
-                await tryLifeCycleFunction(mod, "destroy");
-                mod[RpcState] = 0;
+        if (this.enableLifeCycle) {
+            for (let name in this.registry) {
+                let mod = this.registry[name];
+                tryLifeCycleFunction(mod, "destroy").catch(err => {
+                    this.errorHandler && this.errorHandler(err);
+                });
             }
+        }
+
+        if (this.proxyRoot) {
+            this.proxyRoot["server"] = null;
+            this.proxyRoot = null;
         }
 
         return this;
@@ -95,17 +121,6 @@ export class RpcServer extends RpcChannel {
     register<T>(mod: ModuleProxy<T>) {
         this.registry[mod.name] = mod;
         return this;
-    }
-
-    /** Performs initiation processes for registered modules. */
-    async init() {
-        for (let name in this.registry) {
-            let mod = <ModuleProxy<any> & ModuleProxyBase>this.registry[name];
-
-            mod[RpcState] = 0;
-            await tryLifeCycleFunction(mod, "init");
-            mod[RpcState] = 1;
-        }
     }
 
     /**
@@ -218,10 +233,17 @@ export class RpcServer extends RpcChannel {
                             try {
                                 // Connect to the singleton instance and 
                                 // invokes it's method to handle the request.
-                                let ins = this.registry[modname](local);
+                                let ins = this.registry[modname]();
+
+                                if (isOwnKey(ins, readyState) &&
+                                    ins[readyState] !== 2
+                                ) {
+                                    throwNotAvailableError(modname);
+                                }
+
                                 let task = ins[method].apply(ins, args);
 
-                                if (task && isIteratorLike(task[source])) {
+                                if (task && isIteratorLike(task)) {
                                     tasks.set(<number>taskId, task);
                                     event = RpcEvents.INVOKE;
                                 } else {
@@ -248,10 +270,10 @@ export class RpcServer extends RpcChannel {
 
                             try {
                                 if (!task) {
-                                    let callee = `${modname}->${method}()`;
-
                                     throw new ReferenceError(
-                                        `Task (${taskId}) of ${callee} doesn't exist`
+                                        `Task (${taskId}) of ` +
+                                        `${modname}->${method}()` +
+                                        "doesn't exist"
                                     );
                                 } else {
                                     input = args[0];

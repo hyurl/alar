@@ -6,19 +6,20 @@ import { Injectable } from "./di";
 import { readdirSync } from 'fs';
 import cloneDeep = require("lodash/cloneDeep");
 import merge = require("lodash/merge");
+import values = require("lodash/values");
 import { clone } from "@hyurl/structured-clone";
 import isClass from "could-be-class";
 import {
-    createLocalInstance,
     local,
-    remotized,
-    noLocal,
     set,
-    RpcState,
+    dict,
     patchProperties,
-    dict
+    getInstance,
+    throwNotAvailableError,
+    readyState
 } from './util';
 
+const fallbackToLocal = Symbol("fallbackToLocal");
 const cmd = process.execArgv.concat(process.argv).join(" ");
 const isTsNode = cmd.includes("ts-node");
 export const defaultLoader: ModuleLoader = {
@@ -33,12 +34,12 @@ export const defaultLoader: ModuleLoader = {
 /**
  * Creates a module proxy manually.
  */
-export function createModuleProxy<T = any>(
+export function createModuleProxy(
     name: string,
     path: string,
     loader = defaultLoader,
     singletons = dict()
-): ModuleProxy<T> {
+): ModuleProxy {
     let proxy = function (...args: any[]) {
         if (!new.target) {
             return (<any>proxy).instance(args[0]);
@@ -50,19 +51,20 @@ export function createModuleProxy<T = any>(
     Object.setPrototypeOf(proxy, ModuleProxy.prototype);
     set(proxy, "name", name);
     patchProperties(<any>proxy, path, loader, singletons);
+    proxy[fallbackToLocal] = true;
 
     return <any>applyMagic(proxy, true);
 }
 
 
 @applyMagic
-export abstract class ModuleProxy<T = any> extends Injectable implements ModuleProxy<T> {
+export abstract class ModuleProxy extends Injectable {
     abstract readonly name: string;
     readonly path: string;
     readonly loader: ModuleLoader;
-    protected singletons: { [name: string]: T };
-    protected remoteSingletons: { [serverId: string]: T };
-    protected children: { [name: string]: ModuleProxy<any> };
+    protected children: { [name: string]: ModuleProxy };
+    protected singletons: { [name: string]: any };
+    protected remoteSingletons: { [serverId: string]: any };
 
     get exports(): any {
         if (typeof this.loader.extension === "string") {
@@ -85,7 +87,7 @@ export abstract class ModuleProxy<T = any> extends Injectable implements ModuleP
         }
     }
 
-    get proto(): EnsureInstanceType<T> {
+    get proto(): any {
         let { exports } = this;
 
         if (typeof exports === "object") {
@@ -107,7 +109,7 @@ export abstract class ModuleProxy<T = any> extends Injectable implements ModuleP
         }
     }
 
-    get ctor(): ModuleConstructor<EnsureInstanceType<T>> {
+    get ctor(): new (...args: any[]) => any {
         let { exports } = this;
 
         if (
@@ -122,7 +124,7 @@ export abstract class ModuleProxy<T = any> extends Injectable implements ModuleP
         }
     }
 
-    create(...args: any[]): EnsureInstanceType<T> {
+    create(...args: any[]): any {
         if (this.ctor) {
             return new this.ctor(...args);
         } else if (this.proto) {
@@ -132,43 +134,53 @@ export abstract class ModuleProxy<T = any> extends Injectable implements ModuleP
         }
     }
 
-    instance(route: any = "", ignoreState = false): any {
+    instance(route: any = local): any {
+        if (route === local) {
+            return this.singletons[this.name] || (
+                this.singletons[this.name] = getInstance(<any>this)
+            );
+        }
+
         // If the route matches the any key of the remoteSingletons, return the
         // corresponding singleton as wanted.
         if (typeof route === "string" && this.remoteSingletons[route]) {
             return this.remoteSingletons[route];
         }
 
-        let keys = Object.keys(this.remoteSingletons);
+        let singletons = values(this.remoteSingletons);
 
-        if (route === local || !this[remotized] ||
-            (!keys.length && !this[noLocal])
-        ) {
-            if (this[RpcState] && this[RpcState] !== 1 &&
-                this.singletons[this.name] && !ignoreState
-            ) {
-                throw new ReferenceError(
-                    `Service ${this.name} is not available`
-                );
-            }
-
-            return this.singletons[this.name] || (
-                this.singletons[this.name] = createLocalInstance(<any>this)
-            );
-        } else if (keys.length) {
+        if (singletons.length > 0) {
             // If the module is connected to one or more remote instances,
             // redirect traffic to one of them automatically.
             let num = hash(JSON.stringify(clone(route)));
-            let id = keys[num % keys.length];
-            return this.remoteSingletons[id];
+            let availableSingletons = singletons.filter(item => {
+                return item[readyState] === 2;
+            });
+
+            if (availableSingletons.length > 0) {
+                return availableSingletons[num % availableSingletons.length];
+            } else {
+                return singletons[num % singletons.length];
+            }
         } else {
-            throw new ReferenceError(`Service ${this.name} is not available`);
+            throwNotAvailableError(this.name);
         }
     }
 
+    fallbackToLocal(): boolean;
+    fallbackToLocal(enable: boolean): this;
+    fallbackToLocal(enable: boolean = void 0): this | boolean {
+        if (enable === void 0) {
+            return this[fallbackToLocal];
+        } else {
+            this[fallbackToLocal] = Boolean(enable);
+            return this;
+        }
+    }
+
+    /** @deprecated */
     noLocal(): this {
-        this[noLocal] = true;
-        return this;
+        return this.fallbackToLocal(false);
     }
 
     protected __get(prop: string) {

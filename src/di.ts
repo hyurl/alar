@@ -37,7 +37,7 @@ function addDependency(dependency: Dependency) {
  * @deprecated
  */
 export abstract class Injectable {
-    inject(this: ModuleProxy<any>, route: any = ""): PropertyDecorator {
+    inject(this: ModuleProxy<any>, route: any = void 0): PropertyDecorator {
         return addDependency({
             module: this,
             route

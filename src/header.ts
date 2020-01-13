@@ -11,7 +11,7 @@ declare global {
         [K in keyof FunctionProperties<T>]: ReturnType<T[K]> extends Promise<any>
         ? T[K]
         : (ReturnType<T[K]> extends (AsyncIterableIterator<infer U> | IterableIterator<infer U>)
-            ? (...args: Parameters<T[K]>) => AsyncIterableIterator<U> & Promise<U>
+            ? (...args: Parameters<T[K]>) => AsyncIterableIterator<U>
             : (...args: Parameters<T[K]>) => Promise<ReturnType<T[K]>>
         );
     }
@@ -19,19 +19,10 @@ declare global {
     type Voidable<T> = { [K in keyof T]: T[K] | void }
     type EnsureInstanceType<T> = T extends new (...args: any[]) => infer R ? R : T;
 
-    /**
-     * @deprecated In experience, this interface is very unlikely to be used by
-     *  users, it will be removed in the next release.
-     */
-    interface ModuleConstructor<T> {
-        new(...args: any[]): T;
-        getInstance?(): T;
-    }
-
     interface ModuleProxy<T> {
         new(...args: T extends new (...args: infer A) => any ? A : any[]): EnsureInstanceType<T>;
-        (local: symbol): AsynchronizedFunctionProperties<EnsureInstanceType<T>> & Readonly<NonFunctionProperties<EnsureInstanceType<T>>>;
-        (route?: any): AsynchronizedFunctionProperties<EnsureInstanceType<T>> & Voidable<Readonly<NonFunctionProperties<EnsureInstanceType<T>>>>;
+        (local?: symbol): EnsureInstanceType<T>;
+        (route: any): AsynchronizedFunctionProperties<EnsureInstanceType<T>> & Voidable<Readonly<NonFunctionProperties<EnsureInstanceType<T>>>>;
 
         /** The name (with namespace) of the module. */
         readonly name: string;
@@ -43,7 +34,7 @@ declare global {
         /** The very prototype of the module. */
         readonly proto: EnsureInstanceType<T>;
         /** The very class constructor of the module. */
-        readonly ctor: T extends Function ? T : ModuleConstructor<EnsureInstanceType<T>>;
+        readonly ctor: T extends Function ? T : new (...args: any[]) => EnsureInstanceType<T>;
 
         /** Creates a new instance of the module. */
         create(...args: T extends new (...args: infer A) => any ? A : any[]): EnsureInstanceType<T>;
@@ -54,8 +45,16 @@ declare global {
          * automatically calculate the `route` and direct the traffic to the 
          * corresponding remote instance.
          */
-        instance(local: symbol): AsynchronizedFunctionProperties<EnsureInstanceType<T>> & Readonly<NonFunctionProperties<EnsureInstanceType<T>>>;
-        instance(route?: any): AsynchronizedFunctionProperties<EnsureInstanceType<T>> & Voidable<Readonly<NonFunctionProperties<EnsureInstanceType<T>>>>;
+        instance(local?: symbol): EnsureInstanceType<T>;
+        instance(route: any): AsynchronizedFunctionProperties<EnsureInstanceType<T>> & Voidable<Readonly<NonFunctionProperties<EnsureInstanceType<T>>>>;
+
+        /**
+         * If the module is registered as a remote service, however none of the
+         * RPC channel is available, allow calls to fallback to the local
+         * instance, which is the default behavior, this method is used to
+         * disable (pass `false`) and re-enable (pass `true`) this behavior.
+         */
+        fallbackToLocal(enable: boolean): this;
 
         /**
          * Allowing the current module to be injected as a dependency bound to a
@@ -66,9 +65,7 @@ declare global {
         inject(route?: any): PropertyDecorator;
 
         /**
-         * If the module is registered as remote service, however when no RPC 
-         * channel is available, by default, singleton instance will fail to the
-         * local instance, using this method to disable the default behavior.
+         * @deprecated use `fallbackToLocal(false)` instead.
          */
         noLocal(): this;
     }

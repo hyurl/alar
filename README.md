@@ -4,6 +4,9 @@ Alar is a light-weight framework that provides applications the ability to
 auto-load and hot-reload modules, as well as the ability to serve instances
 remotely as RPC services.
 
+*NOTE: Alar is primarily designed for [SFN](https://github.com/hyurl/sfn)*
+*framework.*
+
 ## Prerequisites
 
 - Node.js `v8.3.0+`
@@ -26,8 +29,7 @@ wipe out the memory cache and reload the module with very few side-effects.
 
 In order to use Alar, one must create a root `ModuleProxy` instance, and assign
 it to the global scope, so other files can directly use it as a root namespace
-without import and share the benefits of declaration merging (in TypeScript
-vernacular).
+without importing the module.
 
 **NOTE: Since v5.5, Alar introduced two new syntaxes to get the singleton and**
 **create new instances of the module, they are more light-weight and elegant,**
@@ -39,7 +41,7 @@ vernacular).
 // src/app.ts
 import { ModuleProxy } from "alar";
 
-// Expose and merge the app as a namespace under the global namespace.
+// Expose and merge the app as a namespace under the global scope.
 declare global {
     namespace app { }
 }
@@ -52,10 +54,10 @@ App.watch();
 ```
 
 In other files, just define and export a default class, and merge the type to 
-the namespace `app`, so that another file can access it directly as namespace.
+the namespace `app`, so that another file can access it directly via namespace.
 
 (NOTE: Alar offers first priority of the `default` export, if a module doesn't 
-have default export, Alar will try to load the entire exports object instead.)
+have default export, Alar will try to load all exports instead.)
 
 ```typescript
 // Be aware that the namespace must be corresponded to the filename.
@@ -155,7 +157,8 @@ declare global {
     }
 }
 
-// It is recommended using non-parameter constructor.
+// It is recommended not to define the constructor and use a non-parameter
+// constructor.
 export default class UserService {
     private users: { firstName: string, lastName: string }[] = [
         { firstName: "David", lastName: "Wood" },
@@ -200,18 +203,19 @@ import { App } from "./app";
 
     service.register(app.services.user);
 
-    // Access the instance in local style but actually remote.
-    let fullName = await app.services.user().getFullName("David");
+    // Accessing the instance in local style but actually calling remote.
+    // Since v6.0, the **route** argument for the module must be explicit.
+    let fullName = await app.services.user("route").getFullName("David");
     console.log(fullName); // David Wood
 })();
 ```
 
 ### Hot-reloading in Remote Service
 
-The local watcher may notice the local file has changed and try to reload the 
-local module (and the local singleton), however, it will not affect any remote 
-instances, that said, the instance served remotely can still be watched and 
-reloaded on the remote server individually.
+The local watcher may notice the local file has been changed and try to reload
+the local module (and the local singleton), however, it will not affect any
+remote instances, that said, the instance served remotely can still be watched
+and reloaded on the remote server individually.
 
 In the above example, since the **remote-service.ts** module imports **app.ts**
 module as well, which starts the watcher, when the **user.ts** module is changed,
@@ -248,7 +252,7 @@ export default class UserService {
     // Whether calling the local instance or a remote instance, the following 
     // program produce the same result.
 
-    let generator = app.services.user().getFriends();
+    let generator = app.services.user("route").getFriends();
 
     for await (let name of generator) {
         console.log(name);
@@ -257,14 +261,8 @@ export default class UserService {
         // Albert
     }
 
-    // If want to get the returning value, just call await on the generator.
-    // NOTE: this syntax only works with Alar framework, don't use it with 
-    // general generators.
-    console.log(await generator); // We are buddies
-
-
     // The following usage gets the same result.
-    let generator2 = app.services.user().getFriends();
+    let generator2 = app.services.user("route").getFriends();
 
     while (true) {
         let { value, done } = await generator2.next();
@@ -287,18 +285,25 @@ export default class UserService {
 
 ## Life Cycle Support
 
-Since 5.0, Alar now supports life cycle functions, if a service class contains
-an `init()` method, it will be used to perform asynchronous initiation, for
-example, connecting to a database. And if it contains a `destroy()` method, it
-will be used to perform asynchronous destruction, to release resources.
+Since v6.0, Alar provides a new way to support life cycle functions, it will be
+used to perform asynchronous initiation, for example, connecting to a database.
+And if it contains a `destroy()` method, it will be used to perform asynchronous
+destruction, to release resources.
 
-To enable this feature, after all needed modules are registered (and any other
-preparations are done), call the `RpcServer.init()` method to perform
-initiation process for every registered module.
+To enable this feature, first calling `ModuleProxy.serve()` method to create an
+RPC server that is not yet served immediately by passing the second argument
+`false`, and after all preparations are finished, calling the `RpcServer.open()`
+method to open the channel and initiate bound modules.
 
 This feature will still work after hot-reloaded the module. However, there
 would be a slight downtime during hot-reloading, and any call would fail until
 the service is re-available again.
+
+NOTE: Life cycle functions are only triggered when serving the module as an RPC
+service, and they will not be triggered for local backups. That means, allowing
+to fall back to local instance may cause some problems, since they haven't
+performed any initiations. To prevent expected behavior, it would better to
+disable the local version of the service by calling `fallbackToLocal(false)`.
 
 ```ts
 // src/services/user.ts
@@ -322,18 +327,14 @@ export default class UserService {
 
 
 (async () => {
-    server.register(app.services.user);
+    let service = App.serve(config, false); // pass false to serve()
 
-    await server.init();
+    service.register(app.services.user);
+
+    // other preparations...
+
+    await service.open();
 })();
 ```
-
-## Dependency Injection
-
-History versions of Alar provides a way to inject a singleton into another
-module, however, after a long time practice, it turns out DI is not that
-practical and less often used in Alar framework, and it sometimes make the code
-even harder to be understood, so this feature is now (since v5.6) being
-deprecated.
 
 For more details, please check the [API documentation](./api.md).
