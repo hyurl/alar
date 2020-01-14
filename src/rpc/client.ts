@@ -11,8 +11,7 @@ import {
     humanizeDuration,
     throwNotAvailableError,
     readyState,
-    dict,
-    local
+    dict
 } from "../util";
 
 type Subscriber = (data: any) => void | Promise<void>;
@@ -266,7 +265,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
             if (!self.connected) {
                 if (mod.fallbackToLocal()) {
                     return new ThenableAsyncGenerator(
-                        mod.instance(local)[method](...args)
+                        mod.instance()[method](...args)
                     );
                 } else {
                     throwNotAvailableError(mod.name);
