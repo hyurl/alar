@@ -14,20 +14,21 @@ listed):
 
 - `name: string` The name (with namespace) of the module.
 - `path: string` The path (without extension) of the module.
-- `exports: any` The very exports object of the module.
+- `exports: any` The very `exports` object of the module.
 - `proto: T` The very prototype of the module.
 - `ctor: typeof T extends Function ? T : new (...args: any[]) => T` The very
     class constructor of the module.
 - `create(...args: any[]): T` Creates a new instance of the module.
 - `instance(route?: any): T` Gets the local singleton or a remote instance of 
-    the module, if connected to one or more remote instances, the module proxy 
-    will automatically calculate the `route` and direct the traffic to the 
-    corresponding remote instance. If the given route matches the server ID of 
+    the module, if connected to one or more remote instances, the module proxy
+    will automatically calculate the `route` and direct the traffic to the
+    corresponding remote instance. If the given route matches the server ID of
     any remote service, the corresponding instance will be returned instead.
 - `fallbackToLocal(enable: boolean): this` If the module is registered as a
-    remote service, however none of the RPC channel is available, allow calls to
-    fallback to the local instance, which is the default behavior, this method
-    is used to disable (pass `false`) and re-enable (pass `true`) this behavior.
+    remote service, however, none of the RPC channel is available, allow calls
+    to fallback to the local instance, which is the default behavior, this
+    method is used to disable (pass `false`) and re-enable (pass `true`) this
+    behavior.
 
 **NOTE: RPC calling will serialize all input and output data, those data that**
 **cannot be serialized will be lost during transmission.**
@@ -66,7 +67,7 @@ class ModuleProxy {
 
 This class must be imported in order to create a root module proxy, and the root
 module should be declared as a namespace under the global scope, in TypeScript,
-the following steps must be walked though for Alar to work in a project.
+the following steps must be walked through for Alar to work in a project.
 
 ```typescript
 import { ModuleProxy } from "alar";
@@ -88,13 +89,13 @@ This class has the following extra properties and methods:
     always return the local instance.
 - `serve(config: string | RpcOptions, immediate?: boolean): Promise<RpcServer>`
     Serves an RPC service according to the given configuration. `immediate` sets
-    whether to open the channel immediately after create the server, it's set
+    whether to open the channel immediately after creating the server, it's set
     `true` by default. However, if you want to do some preparations and register
     modules before serving, set it to `false`, and call `RpcServer.open()`
     manually.
 - `connect(config: string | ClientOptions, immediate?: boolean): Promise<RpcClient>`
     Connects an RPC service according to the given configuration. `immediate`
-    sets whether to open the channel immediately after create the client, it's
+    sets whether to open the channel immediately after creating the client, it's
     set `true` by default. However, if you want to do some preparations and
     register modules before connecting, set it to `false`, and call
     `RpcClient.open()` manually.
@@ -131,8 +132,8 @@ kind of module wanted. (NOTE: The loader must provide cache support.)
 - `extension` Extension name of the module file, by default, it's `.js` (or `.ts`
     in ts-node).
 - `load(filename: string): any` Loads module from the given file or cache.
-- `unload(filename: string): void` Unloads the module in cache if the file is 
-    modified.
+- `unload(filename: string): void` Unloads the module in the cache if the file
+    is modified.
 
 ```typescript
 // Add a loader to resolve JSON modules.
@@ -189,15 +190,15 @@ to the `host` and `port`.
 `secret` is used as a password for authentication, if used, the client must
 provide it as well in order to grant permission to connect.
 
-The `id` property is a little ambiguous. On the server side, if omitted, it will
-fall back to `dsn`, used for the client routing requests. On the client side, if
+The `id` property is a little ambiguous. On the server-side, if omitted, it will
+fall back to `dsn`, used for the client routing requests. On the client-side, if
 omitted, a random string will be generated, used for the server publishing
 topics.
 
 The `codec` property sets in what format should the data be transferred. Since
 v5.2, Alar uses a new codec `CLONE` by default, it's based on `JSON` however
-with structured clone of the original data, that means it supports more types
-than JSON do, like Date, RegExp, TypedArray etc. For more information, see
+with a structured clone of the original data, that means it supports more types
+than JSON do, like Date, RegExp, TypedArray, etc. For more information, see
 [@hyurl/structured-clone](https://github.com/hyurl/structured-clone).
 
 If set `BSON` or `FRON`, the following corresponding packages must be installed.
@@ -212,7 +213,7 @@ If set `BSON` or `FRON`, the following corresponding packages must be installed.
 abstract class RpcChannel implements RpcOptions { }
 ```
 
-This abstract class just indicates the RPC channel that allows modules to 
+This abstract class just indicates the RPC channel that allows modules to
 communicate remotely. methods `ModuleProxy.serve()` and `ModuleProxy.connect()`
 return its server and client implementations accordingly.
 
@@ -238,7 +239,7 @@ class RpcServer extends RpcChannel { }
 The server implementation of the RPC channel.
 
 - `publish(topic: string, data: any, clients?: string[]): boolean` Publishes 
-    data to the corresponding topic, if `clients` are provided, the topic will 
+    data to the corresponding topic, if `clients` are provided, the topic will
     only be published to them.
 - `getClients(): string[]` Returns all IDs of clients that connected to the 
     server.
@@ -257,9 +258,9 @@ interface ClientOptions extends RpcOptions {
 ```
 
 By default `timeout` is set `5000`ms, it is used to force a timeout error when
-a RPC request fires and doesn't get response after a long time.
+an RPC request fires and doesn't get a response after a long time.
 
-The client uses `pingInterval` to set a timer of ping function, so that to
+The client uses `pingInterval` to set a timer of ping function so that to
 ensure the connection is alive. If the server doesn't response when pinging, the
 client will consider the server is down and will destroy and retry the
 connection.
@@ -268,8 +269,8 @@ connection.
 
 When the client detects the server is down or malfunction, it will destroy the
 connection positively and retry connect. Since v5.4, this feature uses an
-exponential back-off mechanism to retry connect rapidly util about 30 minutes
-timeout before consider the server is down permanently, and will close the
+exponential back-off mechanism to retry connect rapidly until about 30 minutes
+timeout before considering the server is down permanently, and close the
 channel after that.
 
 **NOTE: prior to v5.4, reconnection tries timeout is 2 minutes.**

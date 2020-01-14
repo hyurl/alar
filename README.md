@@ -13,21 +13,21 @@ remotely as RPC services.
 
 ## Auto-loading and Hot-reloading
 
-In NodeJS (with CommonJS module solution), `require` and `import` will 
+In NodeJS (with CommonJS module solution), `require` and `import` will
 immediately load the corresponding module and make a reference in the current
-scope. Which means, if the module doesn't finish initiation, e.g. circular
+scope. That means, if the module doesn't finish initiation, e.g. circular
 import, the application may not work as expected. And if the module file is
-modified, the application won't be able to reload that module without restart
-the program.
+modified, the application won't be able to reload that module without
+restarting the program.
 
-Alar, on the other hand, based on namespace and ES6 proxy, it creates a 
+Alar, on the other hand, based on the namespace and ES6 proxy, it creates a 
 *"soft-link"* of the module, and only import the module when truly needed. And
-since  it's soft-linked, when the module file is changed, it has the ability to
+since it's soft-linked, when the module file is changed, it has the ability to
 wipe out the memory cache and reload the module with very few side-effects.
 
 ### How to use?
 
-In order to use Alar, one must create a root `ModuleProxy` instance, and assign
+In order to use Alar, one must create a root `ModuleProxy` instance and assign
 it to the global scope, so other files can directly use it as a root namespace
 without importing the module.
 
@@ -57,10 +57,10 @@ In other files, just define and export a default class, and merge the type to
 the namespace `app`, so that another file can access it directly via namespace.
 
 (NOTE: Alar offers first priority of the `default` export, if a module doesn't 
-have default export, Alar will try to load all exports instead.)
+have a default export, Alar will try to load all exports instead.)
 
 ```typescript
-// Be aware that the namespace must be corresponded to the filename.
+// Be aware that the namespace must correspond to the filename.
 
 // src/bootstrap.ts
 declare global {
@@ -115,10 +115,10 @@ console.log(user.getName()); // Mr. Handsome
 ### Prototype Module
 
 Any module that exports an object as default will be considered as a prototype 
-module, when create a new instance of that module, the object will be used as a 
-prototype (since v4.0.4, a deep clone will be used instead, if an argument is
-passed, it will be merged to the new object). However when calling the singleton
-of that module, the original object itself will be returned.
+module, when creating a new instance of that module, the object will be used as
+a prototype (since v4.0.4, a deep clone will be used instead, if an argument is
+passed, it will be merged into the new object). However when calling the
+singleton of that module, the original object itself will be returned.
 
 ```typescript
 // src/config.ts
@@ -139,7 +139,7 @@ export default <Config>{
 
 ## Remote Service
 
-Alar allows user to easily serve a module remotely, whether in another 
+Alar allows user to easily serve a module remotely, whether in another
 process or in another machine.
 
 ### Example
@@ -250,7 +250,7 @@ export default class UserService {
 // index.ts
 (async () => {
     // Whether calling the local instance or a remote instance, the following 
-    // program produce the same result.
+    // program produces the same result.
 
     let generator = app.services.user("route").getFriends();
 

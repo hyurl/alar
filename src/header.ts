@@ -86,6 +86,6 @@ export interface ModuleLoader {
     cache?: { [filename: string]: any };
     /** Loads module from the given file or cache. */
     load(filename: string): any;
-    /** Unloads the module in cache if the file is modified. */
+    /** Unloads the module in the cache if the file is modified. */
     unload(filename: string): void;
 }
