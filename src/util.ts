@@ -140,21 +140,32 @@ export function humanizeDuration(duration: number): string {
 
 export async function tryLifeCycleFunction(
     mod: ModuleProxy<{ init?(): any, destroy?(): any }>,
-    fn: "init" | "destroy"
+    fn: "init" | "destroy",
+    errorHandle: (err: Error) => void = void 0
 ) {
     let ins = mod();
 
     if (fn === "init") {
         if (typeof ins.init === "function") {
             ins[readyState] = 1; // initiating
-            await ins.init();
+
+            if (errorHandle) {
+                try { await ins.init() } catch (err) { errorHandle(err) }
+            } else {
+                await ins.init();
+            }
         }
 
         ins[readyState] = 2; // ready
     } else if (fn === "destroy") {
         if (typeof ins.destroy === "function") {
             ins[readyState] = 3; // destroying
-            await ins.destroy();
+
+            if (errorHandle) {
+                try { await ins.destroy() } catch (err) { errorHandle(err) }
+            } else {
+                await ins.destroy();
+            }
         }
 
         ins[readyState] = 0; // not ready

@@ -108,9 +108,10 @@ export class ModuleProxy extends ModuleProxyBase {
                         this.server["registry"][name]
                     ) {
                         let mod = this.server["registry"][name];
-                        await tryLifeCycleFunction(mod, "destroy");
+                        let handleError = this.server["errorHandler"];
+                        await tryLifeCycleFunction(mod, "destroy", handleError);
                         tryUnload();
-                        await tryLifeCycleFunction(mod, "init");
+                        await tryLifeCycleFunction(mod, "init", handleError);
                     } else {
                         tryUnload();
                     }

@@ -43,20 +43,35 @@ export class RpcServer extends RpcChannel {
     open(enableLifeCycle = true): Promise<this> {
         return new Promise(async (resolve, reject) => {
             let server: net.Server = this.server = net.createServer();
-            let listener = () => {
-                let handlerError = (err: Error) => {
-                    this.errorHandler && this.errorHandler.call(this, err);
-                };
-
-                resolve(this);
-                server.on("error", handlerError);
-
-                if (enableLifeCycle) {
-                    this.enableLifeCycle = true;
-                    for (let name in this.registry) {
-                        let mod = this.registry[name];
-                        tryLifeCycleFunction(mod, "init").catch(handlerError);
+            let listener = async () => {
+                server.on("error", (err: Error) => {
+                    if (this.errorHandler) {
+                        this.errorHandler.call(this, err);
+                    } else {
+                        // If no error handler is provided, when any error
+                        // occurred, terminate the program.
+                        console.error(err);
+                        process.exit(1);
                     }
+                });
+
+                try {
+                    if (enableLifeCycle) {
+                        this.enableLifeCycle = true;
+                        for (let name in this.registry) {
+                            let mod = this.registry[name];
+                            await tryLifeCycleFunction(
+                                mod,
+                                "init",
+                                this.errorHandler
+                            );
+                        }
+                    }
+
+                    resolve(this);
+                } catch (err) {
+                    this.server.close(null);
+                    reject(err);
                 }
             };
 
