@@ -1,3 +1,5 @@
+import * as alar from ".";
+
 declare global {
     type FunctionPropertyNames<T> = {
         [K in keyof T]: T[K] extends Function ? K : never
@@ -21,7 +23,7 @@ declare global {
 
     interface ModuleProxy<T> {
         new(...args: T extends new (...args: infer A) => any ? A : any[]): EnsureInstanceType<T>;
-        (local?: symbol): EnsureInstanceType<T>;
+        (local?: typeof alar.local): EnsureInstanceType<T>;
         (route: any): AsynchronizedFunctionProperties<EnsureInstanceType<T>> & Voidable<Readonly<NonFunctionProperties<EnsureInstanceType<T>>>>;
 
         /** The name (with namespace) of the module. */
@@ -45,7 +47,7 @@ declare global {
          * automatically calculate the `route` and direct the traffic to the 
          * corresponding remote instance.
          */
-        instance(local?: symbol): EnsureInstanceType<T>;
+        instance(local?: typeof alar.local): EnsureInstanceType<T>;
         instance(route: any): AsynchronizedFunctionProperties<EnsureInstanceType<T>> & Voidable<Readonly<NonFunctionProperties<EnsureInstanceType<T>>>>;
 
         /**

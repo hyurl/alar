@@ -31,12 +31,6 @@ export const defaultLoader: ModuleLoader = {
     }
 }
 
-function getRoute(args: IArguments | any[]) {
-    // Ensure that even if an `undefined` value is passed to the `instance()`,
-    // it will be used as a route to resolve the remote instance.
-    return args.length === 0 ? local : (args[0] === void 0 ? "" : args[0]);
-}
-
 /**
  * Creates a module proxy manually.
  */
@@ -48,7 +42,7 @@ export function createModuleProxy(
 ): ModuleProxy {
     let proxy = function (...args: any[]) {
         if (!new.target) {
-            return (<any>proxy).instance(getRoute(args));
+            return (<any>proxy).instance(args[0]);
         } else {
             return (<any>proxy).create(...args);
         }
@@ -140,9 +134,7 @@ export abstract class ModuleProxy extends Injectable {
         }
     }
 
-    instance(route = void 0): any {
-        route = getRoute(arguments);
-
+    instance(route: any = local): any {
         if (route === local) {
             return this.singletons[this.name] || (
                 this.singletons[this.name] = getInstance(<any>this)
