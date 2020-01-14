@@ -16,13 +16,14 @@ import {
     throwNotAvailableError,
     isOwnKey,
 } from "../util";
+import values = require('lodash/values');
 
 const authorized = Symbol("authorized");
 
 export class RpcServer extends RpcChannel {
     /** The unique ID of the server, used for the client routing requests. */
     readonly id: string;
-    protected server: net.Server;
+    protected server: net.Server = null;
     protected registry: { [name: string]: ModuleProxy<any> } = dict();
     protected clients = new BiMap<string, net.Socket>();
     protected suspendedTasks = new Map<net.Socket, Map<number, ThenableAsyncGenerator>>();
@@ -40,10 +41,30 @@ export class RpcServer extends RpcChannel {
     /**
      * @param enableLifeCycle default value: `true`
      */
-    open(enableLifeCycle = true): Promise<this> {
-        return new Promise(async (resolve, reject) => {
-            let server: net.Server = this.server = net.createServer();
-            let listener = async () => {
+    async open(enableLifeCycle = true): Promise<this> {
+        if (enableLifeCycle) {
+            this.enableLifeCycle = true;
+
+            // Perform initiation for every module in sequence.
+            for (let mod of values(this.registry)) {
+                await tryLifeCycleFunction(mod, "init", this.errorHandler);
+            }
+        }
+
+        if (this.path) {
+            await fs.ensureDir(path.dirname(this.path));
+
+            // If the path exists, it's more likely caused by a previous 
+            // server process closing unexpected, just remove it before ship
+            // the new server.
+            if (await fs.pathExists(this.path)) {
+                await fs.unlink(this.path);
+            }
+        }
+
+        return new Promise((resolve, reject) => {
+            let server = this.server = net.createServer();
+            let listener = () => {
                 server.on("error", (err: Error) => {
                     if (this.errorHandler) {
                         this.errorHandler.call(this, err);
@@ -55,45 +76,19 @@ export class RpcServer extends RpcChannel {
                     }
                 });
 
-                try {
-                    if (enableLifeCycle) {
-                        this.enableLifeCycle = true;
-                        for (let name in this.registry) {
-                            let mod = this.registry[name];
-                            await tryLifeCycleFunction(
-                                mod,
-                                "init",
-                                this.errorHandler
-                            );
-                        }
-                    }
-
-                    resolve(this);
-                } catch (err) {
-                    this.server.close(null);
-                    reject(err);
-                }
+                resolve(this);
             };
 
+            server.once("error", reject)
+                .on("connection", this.handleConnection.bind(this));
+
             if (this.path) {// server IPC (Unix domain socket/Windows named pipe)
-                await fs.ensureDir(path.dirname(this.path));
-
-                // If the path exists, it's more likely caused by a previous 
-                // server process closing unexpected, just remove it before ship
-                // the new server.
-                if (await fs.pathExists(this.path)) {
-                    await fs.unlink(this.path);
-                }
-
                 server.listen(absPath(this.path, true), listener);
             } else if (this.host) { // serve RPC with host name or IP.
                 server.listen(this.port, this.host, listener);
             } else { // server RPC without host name or IP.
                 server.listen(this.port, listener);
             }
-
-            server.once("error", reject)
-                .on("connection", this.handleConnection.bind(this));
         });
     }
 
@@ -117,12 +112,12 @@ export class RpcServer extends RpcChannel {
         });
 
         if (this.enableLifeCycle) {
-            for (let name in this.registry) {
-                let mod = this.registry[name];
-                tryLifeCycleFunction(mod, "destroy").catch(err => {
+            // Perform destructions for every module all at once.
+            await Promise.all(values(this.registry).map(mod => {
+                return tryLifeCycleFunction(mod, "destroy").catch(err => {
                     this.errorHandler && this.errorHandler(err);
                 });
-            }
+            }));
         }
 
         if (this.proxyRoot) {
