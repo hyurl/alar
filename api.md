@@ -160,13 +160,14 @@ export function createModuleProxy(
     name: string,
     path: string,
     loader?: ModuleLoader,
-    singletons?: { [name: string]: any }
+    singletons?: { [name: string]: any },
+    root?: ModuleProxy // class ModuleProxy, not the interface
 ): ModuleProxy
 ```
 
 Creates a module proxy manually. This function is used under the hood of Alar
-framework, however, if you want to create a module proxy outside the root proxy,
-you can use this function to do so.
+framework, however, if you want to create a module proxy whose file path is
+outside the root proxy, you can use this function to do so.
 
 ## RpcOptions
 
@@ -254,6 +255,7 @@ The server implementation of the RPC channel.
 interface ClientOptions extends RpcOptions {
     timeout?: number;
     pingInterval?: number;
+    serverId?: string;
 }
 ```
 
@@ -264,6 +266,10 @@ The client uses `pingInterval` to set a timer of ping function so that to
 ensure the connection is alive. If the server doesn't response when pinging, the
 client will consider the server is down and will destroy and retry the
 connection.
+
+By default, the `serverId` is automatically set according to the `dsn` of the
+server, and updated after finishing the connect. However, if an ID is set when
+serving the RPC server, it would be better to set `serverId` to that ID as well.
 
 ### About Reconnection
 

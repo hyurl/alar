@@ -6,12 +6,15 @@ import isSocketResetError = require('is-socket-reset-error');
 import { ThenableAsyncGenerator, ThenableAsyncGeneratorLike } from 'thenable-generator';
 import { RpcChannel, RpcEvents, RpcOptions, Response, Request } from "./channel";
 import { ModuleProxy as ModuleProxyBase } from "../proxy";
+import { ModuleProxy as ModuleProxyRoot } from "..";
 import {
     createRemoteInstance,
     humanizeDuration,
     throwNotAvailableError,
     readyState,
-    dict
+    dict,
+    proxyRoot,
+    isOwnKey
 } from "../util";
 
 type Subscriber = (data: any) => void | Promise<void>;
@@ -24,6 +27,7 @@ type Task = {
 export interface ClientOptions extends RpcOptions {
     timeout?: number;
     pingInterval?: number;
+    serverId?: string;
 }
 
 export class RpcClient extends RpcChannel implements ClientOptions {
@@ -31,7 +35,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
     readonly id: string;
     readonly timeout: number;
     readonly pingInterval: number;
-    protected serverId: string;
+    serverId: string;
     protected state: ChannelState = "initiated";
     protected socket: net.Socket = null;
     protected registry: { [name: string]: ModuleProxy<any> } = dict();
@@ -52,7 +56,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
         this.id = this.id || Math.random().toString(16).slice(2);
         this.timeout = this.timeout || 5000;
         this.pingInterval = this.pingInterval || 5000;
-        this.serverId = this.dsn;
+        this.serverId = this.serverId || this.dsn;
     }
 
     /** Whether the channel is in connecting state. */
@@ -260,6 +264,22 @@ export class RpcClient extends RpcChannel implements ClientOptions {
     protected createFunction(mod: ModuleProxyBase, method: string) {
         let self = this;
         return function (...args: any[]) {
+            // If the RPC server and the RPC client runs in the same process,
+            // then directly call the local instance to prevent unnecessary
+            // network traffics.
+            let root = (<ModuleProxyRoot>mod[proxyRoot]);
+            if (root && root["server"] && root["server"].id === self.serverId) {
+                let ins = mod.instance();
+
+                if (isOwnKey(ins, readyState) && ins[readyState] !== 2 &&
+                    !mod.fallbackToLocal()
+                ) {
+                    throwNotAvailableError(mod.name);
+                } else {
+                    return new ThenableAsyncGenerator(ins[method](...args));
+                }
+            }
+
             // If the RPC channel is not available, call the local instance and
             // wrap it asynchronous.
             if (!self.connected) {

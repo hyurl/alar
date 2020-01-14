@@ -8,6 +8,7 @@ import { ModuleLoader } from './header';
 
 const WinPipe = "\\\\?\\pipe\\";
 export const local = Symbol("local");
+export const proxyRoot = Symbol("proxyRoot");
 
 /**
  * - 0: not ready (default)
@@ -92,8 +93,8 @@ export function createRemoteInstance(
     // methods.
     return new Proxy(getInstance(mod, true), {
         get: (ins, prop: string | symbol) => {
-            if (prop === readyState) {
-                return ins[readyState];
+            if (typeof prop === "symbol") {
+                return ins[prop];
             }
 
             let type = typeof ins[prop];
@@ -110,7 +111,7 @@ export function createRemoteInstance(
             return isFn ? ins[prop] : (type === "undefined" ? undefined : null);
         },
         has: (ins, prop: string | symbol) => {
-            return prop === readyState
+            return typeof prop === "symbol"
                 ? (prop in ins)
                 : typeof ins[prop] === "function";
         }

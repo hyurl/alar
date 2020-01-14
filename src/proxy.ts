@@ -16,8 +16,10 @@ import {
     patchProperties,
     getInstance,
     throwNotAvailableError,
-    readyState
+    readyState,
+    proxyRoot
 } from './util';
+import { ModuleProxy as ModuleProxyRoot } from ".";
 
 const fallbackToLocal = Symbol("fallbackToLocal");
 const cmd = process.execArgv.concat(process.argv).join(" ");
@@ -38,7 +40,8 @@ export function createModuleProxy(
     name: string,
     path: string,
     loader = defaultLoader,
-    singletons = dict()
+    singletons = dict(),
+    root: ModuleProxyRoot = void 0
 ): ModuleProxy {
     let proxy = function (...args: any[]) {
         if (!new.target) {
@@ -48,10 +51,13 @@ export function createModuleProxy(
         }
     };
 
+    (!loader && root) && (loader = root["loader"]);
+    (!singletons && root) && (singletons = root["singletons"]);
     Object.setPrototypeOf(proxy, ModuleProxy.prototype);
     set(proxy, "name", name);
     patchProperties(<any>proxy, path, loader, singletons);
     proxy[fallbackToLocal] = true;
+    proxy[proxyRoot] = root;
 
     return <any>applyMagic(proxy, true);
 }
@@ -193,7 +199,8 @@ export abstract class ModuleProxy extends Injectable {
                 this.name + "." + String(prop),
                 this.path + sep + String(prop),
                 this.loader,
-                this.singletons
+                this.singletons,
+                this[proxyRoot] || this
             );
         }
     }
