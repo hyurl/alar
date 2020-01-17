@@ -726,4 +726,17 @@ describe("Alar ModuleProxy", () => {
         await client.close();
         await server.close();
     });
+
+    it("should pass instanceof check onto the module proxy", () => {
+        let user = new app.service.user("Ayon Lee");
+        assert(user instanceof app.service.user);
+        assert(app.service.user() instanceof app.service.user);
+    });
+
+    it("should call Object.prototype.toString() on the module proxy as as expected", () => {
+        assert.strictEqual(
+            Object.prototype.toString.call(app.service.user),
+            "[object ModuleProxy]"
+        );
+    });
 });

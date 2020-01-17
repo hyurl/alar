@@ -43,11 +43,11 @@ export function createModuleProxy(
     singletons = dict(),
     root: ModuleProxyRoot = void 0
 ): ModuleProxy {
-    let proxy = function (...args: any[]) {
+    let proxy: ModuleProxy = <any>function (...args: any[]) {
         if (!new.target) {
-            return (<any>proxy).instance(args[0]);
+            return proxy.instance(args[0]);
         } else {
-            return (<any>proxy).create(...args);
+            return proxy.create(...args);
         }
     };
 
@@ -55,11 +55,15 @@ export function createModuleProxy(
     (!singletons && root) && (singletons = root["singletons"]);
     Object.setPrototypeOf(proxy, ModuleProxy.prototype);
     set(proxy, "name", name);
-    patchProperties(<any>proxy, path, loader, singletons);
+    patchProperties(proxy, path, loader, singletons);
     proxy[fallbackToLocal] = true;
     proxy[proxyRoot] = root;
+    proxy[Symbol.toStringTag] = "ModuleProxy";
+    proxy[Symbol.hasInstance] = function ModuleProxy(ins: any) {
+        return ins instanceof proxy.ctor;
+    };
 
-    return <any>applyMagic(proxy, true);
+    return applyMagic(<any>proxy, true);
 }
 
 
