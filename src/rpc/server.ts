@@ -14,9 +14,9 @@ import {
     readyState,
     tryLifeCycleFunction,
     throwNotAvailableError,
-    isOwnKey,
 } from "../util";
 import values = require('lodash/values');
+import isOwnKey from "@hyurl/utils/isOwnKey";
 
 const authorized = Symbol("authorized");
 
@@ -175,9 +175,11 @@ export class RpcServer extends RpcChannel {
     }
 
     protected handleConnection(socket: net.Socket) {
-        let autoDestroy = setTimeout(() => {
-            socket.destroy(new Error("Handshake required"));
-        }, 1000);
+        let addr = `${socket.remoteAddress || ""}:${socket.remotePort || ""}`;
+        let destroyWithHandshakeError = () => {
+            socket.destroy(new Error(`Handshake required (client: ${addr})`));
+        };
+        let autoDestroy = setTimeout(destroyWithHandshakeError, 1000);
 
         this.bsp.wrap(socket).on("error", err => {
             // When any error occurs, if it's a socket reset error, e.g.
@@ -205,7 +207,9 @@ export class RpcServer extends RpcChannel {
                     socket[authorized] = true;
                     return;
                 } else {
-                    return socket.destroy(new Error("Connection unauthorized"));
+                    return socket.destroy(
+                        new Error(`Connection unauthorized (client: ${addr})`)
+                    );
                 }
             }
 
@@ -218,101 +222,105 @@ export class RpcServer extends RpcChannel {
                 }));
             }
 
-            if (Array.isArray(msg)) {
-                let [event, taskId, modname, method, ...args] = msg;
+            if (!Array.isArray(msg))
+                return;
 
-                switch (event) {
-                    case RpcEvents.HANDSHAKE:
-                        clearTimeout(autoDestroy);
-                        this.clients.set(<string>taskId, socket);
-                        this.suspendedTasks.set(socket, new Map());
-                        // Send CONNECT event to notify the client that the 
-                        // connection is finished.
-                        this.dispatch(socket, RpcEvents.CONNECT, taskId, this.id);
-                        break;
+            let [event, taskId, modName, method, ...args] = msg;
 
-                    case RpcEvents.PING:
-                        this.dispatch(socket, RpcEvents.PONG);
-                        break;
+            // If trying to invoke RPC functions before handshake,
+            // report error and destroy the socket.
+            if (!this.suspendedTasks.has(socket) &&
+                event !== RpcEvents.HANDSHAKE) {
+                return destroyWithHandshakeError();
+            }
 
-                    case RpcEvents.INVOKE:
-                        {
-                            let data: any;
-                            let tasks = this.suspendedTasks.get(socket);
+            switch (event) {
+                case RpcEvents.HANDSHAKE: {
+                    let clientId = String(taskId);
+                    clearTimeout(autoDestroy);
+                    this.clients.set(clientId, socket);
+                    this.suspendedTasks.set(socket, new Map());
+                    // Send CONNECT event to notify the client that the 
+                    // connection is complete.
+                    this.dispatch(socket, RpcEvents.CONNECT, clientId, this.id);
+                    break;
+                }
 
-                            try {
-                                // Connect to the singleton instance and 
-                                // invokes it's method to handle the request.
-                                let ins = this.registry[modname]();
+                case RpcEvents.PING: {
+                    this.dispatch(socket, RpcEvents.PONG);
+                    break;
+                }
 
-                                if (isOwnKey(ins, readyState) &&
-                                    ins[readyState] !== 2
-                                ) {
-                                    throwNotAvailableError(modname);
-                                }
+                case RpcEvents.INVOKE: {
+                    let data: any;
+                    let tasks = this.suspendedTasks.get(socket);
 
-                                let task = ins[method].apply(ins, args);
+                    try {
+                        // Connect to the singleton instance and invokes it's
+                        // method to handle the request.
+                        let ins = this.registry[modName]();
 
-                                if (task && isIteratorLike(task)) {
-                                    tasks.set(<number>taskId, task);
-                                    event = RpcEvents.INVOKE;
-                                } else {
-                                    data = await task;
-                                    event = RpcEvents.RETURN;
-                                }
-                            } catch (err) {
-                                event = RpcEvents.THROW;
-                                data = err;
-                            }
-
-                            // Send response or error to the client.
-                            this.dispatch(socket, event, taskId, data);
+                        if (isOwnKey(ins, readyState) && ins[readyState] !== 2) {
+                            throwNotAvailableError(modName);
                         }
-                        break;
 
-                    case RpcEvents.YIELD:
-                    case RpcEvents.RETURN:
-                    case RpcEvents.THROW:
-                        {
-                            let data: any, input: any;
-                            let tasks = this.suspendedTasks.get(socket);
-                            let task = tasks.get(<number>taskId);
+                        let task = ins[method].apply(ins, args);
 
-                            try {
-                                if (!task) {
-                                    throw new ReferenceError(
-                                        `Task (${taskId}) of ` +
-                                        `${modname}->${method}()` +
-                                        "doesn't exist"
-                                    );
-                                } else {
-                                    input = args[0];
-                                }
-
-                                // Invokes the generator's method according to
-                                // the event.
-                                if (event === RpcEvents.YIELD) {
-                                    data = await task.next(input);
-                                } else if (event === RpcEvents.RETURN) {
-                                    data = await task.return(input);
-                                } else {
-                                    // Calling the throw method will cause an
-                                    // error being thrown and go to the catch
-                                    // block.
-                                    await task.throw(input);
-                                }
-
-                                data.done && tasks.delete(<number>taskId);
-                            } catch (err) {
-                                event = RpcEvents.THROW;
-                                data = err;
-                                task && tasks.delete(<number>taskId);
-                            }
-
-                            this.dispatch(socket, event, taskId, data);
+                        if (task && isIteratorLike(task)) {
+                            tasks.set(<number>taskId, task);
+                            event = RpcEvents.INVOKE;
+                        } else {
+                            data = await task;
+                            event = RpcEvents.RETURN;
                         }
-                        break;
+                    } catch (err) {
+                        event = RpcEvents.THROW;
+                        data = err;
+                    }
 
+                    // Send response or error to the client.
+                    this.dispatch(socket, event, taskId, data);
+                    break;
+                }
+
+                case RpcEvents.YIELD:
+                case RpcEvents.RETURN:
+                case RpcEvents.THROW: {
+                    let data: any, input: any;
+                    let tasks = this.suspendedTasks.get(socket);
+                    let task = tasks.get(<number>taskId);
+
+                    try {
+                        if (!task) {
+                            throw new ReferenceError(
+                                `Task (${taskId}) of ${modName}->${method}()` +
+                                "doesn't exist"
+                            );
+                        } else {
+                            input = args[0];
+                        }
+
+                        // Invokes the generator's method according to
+                        // the event.
+                        if (event === RpcEvents.YIELD) {
+                            data = await task.next(input);
+                        } else if (event === RpcEvents.RETURN) {
+                            data = await task.return(input);
+                        } else {
+                            // Calling the throw method will cause an error
+                            // being thrown and go to the catch block.
+                            await task.throw(input);
+                        }
+
+                        data.done && tasks.delete(<number>taskId);
+                    } catch (err) {
+                        event = RpcEvents.THROW;
+                        data = err;
+                        task && tasks.delete(<number>taskId);
+                    }
+
+                    this.dispatch(socket, event, taskId, data);
+                    break;
                 }
             }
         });

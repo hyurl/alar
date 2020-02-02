@@ -4,7 +4,8 @@ import config from "../app/config";
 export const App = global["app"] = new alar.ModuleProxy("app", __dirname + "/../app");
 
 (async () => {
-    var server = await App.serve(config);
+    let _config = Object.assign({ secret: "abcdefg" }, config);
+    var server = await App.serve(_config);
 
     server.register(app.service.user);
 

@@ -13,9 +13,10 @@ import {
     throwNotAvailableError,
     readyState,
     dict,
-    proxyRoot,
-    isOwnKey
+    proxyRoot
 } from "../util";
+import last = require("lodash/last");
+import isOwnKey from "@hyurl/utils/isOwnKey";
 
 type Subscriber = (data: any) => void | Promise<void>;
 type ChannelState = "initiated" | "connecting" | "connected" | "closed";
@@ -93,57 +94,15 @@ export class RpcClient extends RpcChannel implements ClientOptions {
                     this.state = "connected";
                     this.resume();
 
-                    if (this.pingTimer && this.reconnect) {
-                        return resolve(this);
+                    if (!this.pingTimer && !this.reconnect) {
+                        this.setPingAndReconnectTimer(serverId);
                     }
-
-                    this.pingTimer = setInterval(() => {
-                        // The strategy is, we only need to send a PING signal
-                        // to the server, and don't have to concern about
-                        // whether the server would or would not response a PONG
-                        // signal, we only need to detect if any data is
-                        // received from the server, and refresh the
-                        // lastActiveTime to prevent  sending too much
-                        // unnecessary PING/PONG frame.
-                        let duration = Date.now() - this.lastActiveTime;
-                        if (duration >= this.pingInterval) {
-                            this.selfDestruction = setTimeout(
-                                this.socket.destroy.bind(this.socket),
-                                this.timeout
-                            );
-
-                            this.send(RpcEvents.PING, this.id);
-                        }
-                    }, 5000);
-                    this.reconnect = exponential({
-                        maxDelay: 5000
-                    }).on("ready", async (num) => {
-                        // Retry connect in exponential timeout.
-                        try {
-                            await this.open();
-                        } catch (e) { }
-
-                        if (this.connected) {
-                            this.reconnect.reset();
-                            this.resume(); // resume service
-                        } else if (num === 365) {
-                            // If tried 365 times (about 30 minutes) and still
-                            // have no connection, then consider the server is
-                            // down permanently and close the client. 
-                            await this.close();
-                            console.error(
-                                `Connection to ${serverId} lost permanently`
-                            );
-                        } else {
-                            this.reconnect.backoff();
-                        }
-                    });
 
                     resolve(this);
                 };
 
-                // Sending the connection secret before hitting handshaking.
                 if (this.secret) {
+                    // Sending the connection secret before hitting handshaking.
                     this.socket.write(this.secret, () => {
                         this.send(RpcEvents.HANDSHAKE, this.id);
                     });
@@ -206,6 +165,50 @@ export class RpcClient extends RpcChannel implements ClientOptions {
         return this;
     }
 
+    private setPingAndReconnectTimer(serverId: string) {
+        this.pingTimer = setInterval(() => {
+            // The strategy is, we only need to send a PING signal
+            // to the server, and don't have to concern about
+            // whether the server would or would not response a PONG
+            // signal, we only need to detect if any data is
+            // received from the server, and refresh the
+            // lastActiveTime to prevent  sending too much
+            // unnecessary PING/PONG frame.
+            let duration = Date.now() - this.lastActiveTime;
+            if (duration >= this.pingInterval) {
+                this.selfDestruction = setTimeout(
+                    this.socket.destroy.bind(this.socket),
+                    this.timeout
+                );
+
+                this.send(RpcEvents.PING, this.id);
+            }
+        }, 5000);
+        this.reconnect = exponential({
+            maxDelay: 5000
+        }).on("ready", async (num) => {
+            // Retry connect in exponential timeout.
+            try {
+                await this.open();
+            } catch (e) { }
+
+            if (this.connected) {
+                this.reconnect.reset();
+                this.resume(); // resume service
+            } else if (num === 365) {
+                // If tried 365 times (about 30 minutes) and still
+                // have no connection, then consider the server is
+                // down permanently and close the client. 
+                await this.close();
+                console.error(
+                    `Connection to ${serverId} lost permanently`
+                );
+            } else {
+                this.reconnect.backoff();
+            }
+        });
+    }
+
     private flushReadyState(state: number) {
         for (let name in this.registry) {
             let mod: ModuleProxyBase = <any>this.registry[name];
@@ -253,7 +256,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
     protected send(...data: Request) {
         if (this.socket && !this.socket.destroyed && this.socket.writable) {
             // If the last argument in the data is undefined, do not send it.
-            if (data[data.length - 1] === undefined) {
+            if (last(data) === undefined) {
                 data.pop();
             }
 
@@ -341,7 +344,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
             let task: Task;
 
             switch (event) {
-                case RpcEvents.CONNECT:
+                case RpcEvents.CONNECT: {
                     if (data !== this.serverId) { // only for fresh connect
                         // Update remote singletons map.
                         for (let name in this.registry) {
@@ -358,8 +361,9 @@ export class RpcClient extends RpcChannel implements ClientOptions {
                     this.serverId = data;
                     this.finishConnect();
                     break;
+                }
 
-                case RpcEvents.BROADCAST:
+                case RpcEvents.BROADCAST: {
                     // If receives the broadcast event, call all the 
                     // handlers bound to the corresponding topic. 
                     let handlers = this.topics.get(<string>taskId);
@@ -374,20 +378,22 @@ export class RpcClient extends RpcChannel implements ClientOptions {
                         });
                     }
                     break;
+                }
 
                 // When receiving response from the server, resolve 
                 // immediately.
                 case RpcEvents.INVOKE:
                 case RpcEvents.YIELD:
-                case RpcEvents.RETURN:
+                case RpcEvents.RETURN: {
                     if (task = this.tasks.get(<number>taskId)) {
                         task.resolve(data);
                     }
                     break;
+                }
 
                 // If any error occurs on the server, it will be delivered
                 // to the client.
-                case RpcEvents.THROW:
+                case RpcEvents.THROW: {
                     if (task = this.tasks.get(<number>taskId)) {
                         // Codec 'CLONE' uses declone internally, but for
                         // other codecs, declone must be explicit.
@@ -395,6 +401,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
                         task.reject(data);
                     }
                     break;
+                }
             }
         });
 
@@ -416,7 +423,7 @@ class ThenableIteratorProxy implements ThenableAsyncGeneratorLike {
 
     constructor(
         protected client: RpcClient,
-        protected modname: string,
+        protected modName: string,
         protected method: string,
         ...args: any[]
     ) {
@@ -489,7 +496,7 @@ class ThenableIteratorProxy implements ThenableAsyncGeneratorLike {
         return setTimeout(() => {
             if (this.queue.length > 0) {
                 let task = this.queue.shift();
-                let callee = `${this.modname}->${this.method}()`;
+                let callee = `${this.modName}->${this.method}()`;
                 let duration = humanizeDuration(this.client.timeout);
 
                 task.reject(new Error(
@@ -569,7 +576,7 @@ class ThenableIteratorProxy implements ThenableAsyncGeneratorLike {
                 this.client["send"](
                     event,
                     this.taskId,
-                    this.modname,
+                    this.modName,
                     this.method,
                     [...this.args],
                     ...args
@@ -578,7 +585,7 @@ class ThenableIteratorProxy implements ThenableAsyncGeneratorLike {
                 this.client["send"](
                     event,
                     this.taskId,
-                    this.modname,
+                    this.modName,
                     this.method,
                     ...args
                 );

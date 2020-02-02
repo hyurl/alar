@@ -235,9 +235,10 @@ describe("Alar ModuleProxy", () => {
     });
 
     it("should reconnect the RPC service in the background automatically", async () => {
+        let _config = Object.assign({ secret: "abcdefg" }, config);
         let filename = __dirname + "/server/index.js";
         let proc = await fork(filename);
-        let client = await App.connect(config);
+        let client = await App.connect(_config);
 
         client.register(app.service.user);
 

@@ -1,11 +1,11 @@
 {
   "name": "alar",
-  "version": "6.5.1",
+  "version": "6.6.0",
   "description": "Auto-Load And Remote.",
   "main": "dist/index.js",
   "types": "src/index.ts",
   "scripts": {
-    "prepublish": "tsc",
+    "prepublishOnly": "tsc",
     "pretest": "mkdir -p ./test/.bin/test/ && cp -R ./test/json ./test/.bin/test && tsc -p test",
     "test": "mocha --exit test/.bin/test",
     "posttest": "rm -rf ./test/.bin"
@@ -35,6 +35,7 @@
   "homepage": "https://github.com/hyurl/alar#readme",
   "dependencies": {
     "@hyurl/structured-clone": "^0.1.4",
+    "@hyurl/utils": "^0.1.2",
     "@types/backoff": "^2.5.1",
     "@types/fs-extra": "^8.0.1",
     "advanced-collections": "^0.1.2",
