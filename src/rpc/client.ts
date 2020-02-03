@@ -44,6 +44,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
     protected tasks = new Map<number, Task>();
     protected topics = new Map<string, Set<Subscriber>>();
     protected finishConnect: Function = null;
+    protected rejectConnect: Function = null;
     private lastActiveTime: number = Date.now();
     protected selfDestruction: NodeJS.Timer = null;
     protected pingTimer: NodeJS.Timer = null;
@@ -86,20 +87,25 @@ export class RpcClient extends RpcChannel implements ClientOptions {
             }
 
             this.state === "connecting";
+            this.finishConnect = () => {
+                this.state = "connected";
+                this.resume();
 
+                if (!this.pingTimer && !this.reconnect) {
+                    this.setPingAndReconnectTimer(serverId);
+                }
+
+                resolve(this);
+            };
+            this.rejectConnect = () => {
+                reject(new Error(`Unable to connect ${serverId}`));
+            };
+
+            let timer = setTimeout(this.rejectConnect, this.timeout);
             let connectListener = () => {
+                clearTimeout(timer);
                 this.socket.removeListener("error", errorListener);
                 this.prepareChannel();
-                this.finishConnect = () => {
-                    this.state = "connected";
-                    this.resume();
-
-                    if (!this.pingTimer && !this.reconnect) {
-                        this.setPingAndReconnectTimer(serverId);
-                    }
-
-                    resolve(this);
-                };
 
                 if (this.secret) {
                     // Sending the connection secret before hitting handshaking.
@@ -111,6 +117,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
                 }
             };
             let errorListener = (err: Error) => {
+                clearTimeout(timer);
                 this.socket.removeListener("connect", connectListener);
                 reject(err);
             };
@@ -316,7 +323,9 @@ export class RpcClient extends RpcChannel implements ClientOptions {
                 }
             }
         }).on("close", () => {
-            if (!this.closed) {
+            if (this.connecting) {
+                this.rejectConnect && this.rejectConnect();
+            } else if (!this.closed) {
                 // If the socket is closed or reset. but the channel remains
                 // open, pause the service immediately and try to reconnect.
                 this.state = "connecting"; // MUST DO
