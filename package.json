@@ -1,6 +1,6 @@
 {
   "name": "alar",
-  "version": "6.7.0",
+  "version": "6.7.1",
   "description": "Auto-Load And Remote.",
   "main": "dist/index.js",
   "types": "src/index.ts",
@@ -34,7 +34,7 @@
   },
   "homepage": "https://github.com/hyurl/alar#readme",
   "dependencies": {
-    "@hyurl/structured-clone": "^0.1.5",
+    "@hyurl/structured-clone": "^0.1.6",
     "@hyurl/utils": "^0.1.2",
     "@types/backoff": "^2.5.1",
     "@types/fs-extra": "^8.0.1",
