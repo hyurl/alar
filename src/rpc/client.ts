@@ -1,7 +1,7 @@
 import * as net from "net";
 import sequid from "sequid";
 import { exponential, Backoff } from "backoff";
-import { declone } from "@hyurl/structured-clone";
+import { decompose } from "@hyurl/structured-clone";
 import isSocketResetError = require('is-socket-reset-error');
 import { ThenableAsyncGenerator, ThenableAsyncGeneratorLike } from 'thenable-generator';
 import { RpcChannel, RpcEvents, RpcOptions, Response, Request } from "./channel";
@@ -404,9 +404,9 @@ export class RpcClient extends RpcChannel implements ClientOptions {
                 // to the client.
                 case RpcEvents.THROW: {
                     if (task = this.tasks.get(<number>taskId)) {
-                        // Codec 'CLONE' uses declone internally, but for
-                        // other codecs, declone must be explicit.
-                        (this.codec !== "CLONE") && (data = declone(data));
+                        // Codec 'CLONE' uses `decompose` internally, but for
+                        // other codecs, `decompose` must be explicit.
+                        (this.codec !== "CLONE") && (data = decompose(data));
                         task.reject(data);
                     }
                     break;

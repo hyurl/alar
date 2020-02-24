@@ -7,7 +7,7 @@ import { readdirSync } from 'fs';
 import cloneDeep = require("lodash/cloneDeep");
 import merge = require("lodash/merge");
 import values = require("lodash/values");
-import { clone } from "@hyurl/structured-clone";
+import { serialize } from "@hyurl/structured-clone";
 import isClass from "could-be-class";
 import {
     local,
@@ -162,7 +162,7 @@ export abstract class ModuleProxy extends Injectable {
         if (singletons.length > 0) {
             // If the module is connected to one or more remote instances,
             // redirect traffic to one of them automatically.
-            let num = hash(JSON.stringify(clone(route)));
+            let num = hash(serialize(route));
             let availableSingletons = singletons.filter(item => {
                 return item[readyState] === 2;
             });

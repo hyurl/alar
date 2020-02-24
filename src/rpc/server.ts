@@ -1,7 +1,7 @@
 import * as net from "net";
 import * as path from "path";
 import * as fs from "fs-extra";
-import { clone } from '@hyurl/structured-clone';
+import { compose } from '@hyurl/structured-clone';
 import { BiMap } from "advanced-collections";
 import { isIteratorLike } from "check-iterable";
 import { ThenableAsyncGenerator } from "thenable-generator";
@@ -167,7 +167,7 @@ export class RpcServer extends RpcChannel {
         if (!socket.destroyed && socket.writable) {
             if (event === RpcEvents.THROW) {
                 // Use structured clone algorithm to process error.
-                data = clone(data);
+                data = compose(data);
             }
 
             socket.write(<any>[event, ...data]);
