@@ -15,7 +15,7 @@ import {
     dict,
     patchProperties,
     getInstance,
-    throwNotAvailableError,
+    throwUnavailableError,
     readyState,
     proxyRoot
 } from './util';
@@ -173,7 +173,7 @@ export abstract class ModuleProxy extends Injectable {
                 return singletons[num % singletons.length];
             }
         } else {
-            throwNotAvailableError(this.name);
+            throwUnavailableError(this.name);
         }
     }
 

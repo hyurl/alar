@@ -170,7 +170,7 @@ export async function tryLifeCycleFunction(
     }
 }
 
-export function throwNotAvailableError(name: string) {
+export function throwUnavailableError(name: string) {
     throw new ReferenceError(`Service ${name} is not available`);
 }
 

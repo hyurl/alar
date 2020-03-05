@@ -13,7 +13,7 @@ import {
     absPath,
     readyState,
     tryLifeCycleFunction,
-    throwNotAvailableError,
+    throwUnavailableError,
 } from "../util";
 import values = require('lodash/values');
 import isOwnKey from "@hyurl/utils/isOwnKey";
@@ -261,7 +261,7 @@ export class RpcServer extends RpcChannel {
                         let ins = this.registry[modName]();
 
                         if (isOwnKey(ins, readyState) && ins[readyState] !== 2) {
-                            throwNotAvailableError(modName);
+                            throwUnavailableError(modName);
                         }
 
                         let task = ins[method].apply(ins, args);
@@ -292,9 +292,9 @@ export class RpcServer extends RpcChannel {
 
                     try {
                         if (!task) {
+                            let callee = `${modName}(<route>).${method}()`;
                             throw new ReferenceError(
-                                `Task (${taskId}) of ${modName}->${method}()` +
-                                "doesn't exist"
+                                `${callee} failed (${taskId})`
                             );
                         } else {
                             input = args[0];

@@ -10,7 +10,7 @@ import { ModuleProxy as ModuleProxyRoot } from "..";
 import {
     createRemoteInstance,
     humanizeDuration,
-    throwNotAvailableError,
+    throwUnavailableError,
     readyState,
     dict,
     proxyRoot
@@ -284,7 +284,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
                 if (isOwnKey(ins, readyState) && ins[readyState] !== 2 &&
                     !mod.fallbackToLocal()
                 ) {
-                    throwNotAvailableError(mod.name);
+                    throwUnavailableError(mod.name);
                 } else {
                     return new ThenableAsyncGenerator(ins[method](...args));
                 }
@@ -298,7 +298,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
                         mod.instance()[method](...args)
                     );
                 } else {
-                    throwNotAvailableError(mod.name);
+                    throwUnavailableError(mod.name);
                 }
             }
 
@@ -505,12 +505,10 @@ class ThenableIteratorProxy implements ThenableAsyncGeneratorLike {
         return setTimeout(() => {
             if (this.queue.length > 0) {
                 let task = this.queue.shift();
-                let callee = `${this.modName}->${this.method}()`;
+                let callee = `${this.modName}(<route>).${this.method}()`;
                 let duration = humanizeDuration(this.client.timeout);
 
-                task.reject(new Error(
-                    `Request to ${callee} timeout after ${duration}`
-                ));
+                task.reject(new Error(`${callee} timeout after ${duration}`));
             }
 
             this.close();
