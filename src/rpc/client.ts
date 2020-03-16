@@ -541,7 +541,7 @@ class ThenableIteratorProxy implements ThenableAsyncGeneratorLike {
 
         // Pack every request as Promise, and assign the resolver and rejecter 
         // to the task, so that when the result or any error is received, 
-        // then can be called correctly.
+        // they can be called properly.
         return new Promise((resolve, reject) => {
             let timer = this.createTimeout();
 
@@ -560,7 +560,7 @@ class ThenableIteratorProxy implements ThenableAsyncGeneratorLike {
         });
     }
 
-    protected invokeTask(event: RpcEvents, ...args: any[]): Promise<any> {
+    protected async invokeTask(event: RpcEvents, ...args: any[]): Promise<any> {
         if (this.status === "closed") {
             switch (event) {
                 case RpcEvents.INVOKE:
@@ -600,7 +600,9 @@ class ThenableIteratorProxy implements ThenableAsyncGeneratorLike {
 
             this.status = "suspended";
 
-            return this.prepareTask(event, args[0]).then(res => {
+            try {
+                let res = await this.prepareTask(event, args[0]);
+
                 if (event !== RpcEvents.INVOKE) {
                     ("value" in res) || (res.value = void 0);
 
@@ -612,12 +614,12 @@ class ThenableIteratorProxy implements ThenableAsyncGeneratorLike {
                 }
 
                 return res;
-            }).catch(err => {
+            } catch (err) {
                 this.status = "closed";
                 this.client["tasks"].delete(this.taskId);
 
                 throw err;
-            });
+            }
         }
     }
 }
