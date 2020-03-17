@@ -221,12 +221,13 @@ describe("Alar ModuleProxy", () => {
         await server.close();
     });
 
-    it("should destroy connection if not handshake as expected", async () => {
+    it("should destroy connection if not handshake as expected", async function () {
+        this.timeout(10000);
         let server = await App.serve(config);
         let socket = net.createConnection(config.port, config.host);
 
         while (!socket.destroyed) {
-            await sleep(10);
+            await sleep(1000);
         }
 
         assert.ok(socket.destroyed);

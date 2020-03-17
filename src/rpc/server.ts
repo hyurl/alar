@@ -179,7 +179,7 @@ export class RpcServer extends RpcChannel {
         let destroyWithHandshakeError = () => {
             socket.destroy(new Error(`Handshake required (client: ${addr})`));
         };
-        let autoDestroy = setTimeout(destroyWithHandshakeError, 1000);
+        let autoDestroy = setTimeout(destroyWithHandshakeError, 5000);
 
         this.bsp.wrap(socket).on("error", err => {
             // When any error occurs, if it's a socket reset error, e.g.
