@@ -1,6 +1,6 @@
 {
   "name": "alar",
-  "version": "6.8.1",
+  "version": "6.8.2",
   "description": "Auto-Load And Remote.",
   "main": "dist/index.js",
   "types": "src/index.ts",
@@ -44,7 +44,7 @@
     "check-iterable": "^1.0.2",
     "chokidar": "^3.3.1",
     "could-be-class": "^0.1.4",
-    "fs-extra": "^8.1.0",
+    "fs-extra": "^9.0.0",
     "is-socket-reset-error": "^0.1.1",
     "js-magic": "^1.1.1",
     "lodash": "^4.17.15",
