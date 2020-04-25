@@ -1,26 +1,13 @@
 import * as alar from ".";
+import "@hyurl/utils/types";
+
+type Voidable<T> = { [K in keyof T]: T[K] | void };
+type EnsureInstanceType<T> = T extends new (...args: any[]) => infer R ? R : T;
+type AsynchronizedFunctionProperties<T> = {
+    [K in keyof FunctionProperties<T>]: Asynchronize<T[K]>;
+};
 
 declare global {
-    type FunctionPropertyNames<T> = {
-        [K in keyof T]: T[K] extends Function ? K : never
-    }[keyof T];
-    type NonFunctionPropertyNames<T> = {
-        [K in keyof T]: T[K] extends Function ? never : K
-    }[keyof T];
-    type FunctionProperties<T> = Pick<T, FunctionPropertyNames<T>>;
-    type NonFunctionProperties<T> = Pick<T, NonFunctionPropertyNames<T>>;
-    type AsynchronizedFunctionProperties<T> = {
-        [K in keyof FunctionProperties<T>]: ReturnType<T[K]> extends Promise<any>
-        ? T[K]
-        : (ReturnType<T[K]> extends (AsyncIterableIterator<infer U> | IterableIterator<infer U>)
-            ? (...args: Parameters<T[K]>) => AsyncIterableIterator<U>
-            : (...args: Parameters<T[K]>) => Promise<ReturnType<T[K]>>
-        );
-    }
-
-    type Voidable<T> = { [K in keyof T]: T[K] | void }
-    type EnsureInstanceType<T> = T extends new (...args: any[]) => infer R ? R : T;
-
     interface ModuleProxy<T> {
         new(...args: T extends new (...args: infer A) => any ? A : any[]): EnsureInstanceType<T>;
         (local?: typeof alar.local): EnsureInstanceType<T>;
@@ -85,7 +72,7 @@ export interface ModuleLoader {
      * It is recommended using this property to store loaded modules, so that
      * the internal watcher can manipulate the cache when necessary.
      */
-    cache?: { [filename: string]: any };
+    cache?: { [filename: string]: any; };
     /** Loads module from the given file or cache. */
     load(filename: string): any;
     /** Unloads the module in the cache if the file is modified. */
