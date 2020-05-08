@@ -1,4 +1,3 @@
-import hash = require("string-hash");
 import { sep, dirname, basename, extname } from "path";
 import { applyMagic } from "js-magic";
 import { ModuleLoader } from './index';
@@ -7,7 +6,6 @@ import { readdirSync } from 'fs';
 import cloneDeep = require("lodash/cloneDeep");
 import merge = require("lodash/merge");
 import values = require("lodash/values");
-import { serialize } from "@hyurl/structured-clone";
 import isClass from "could-be-class";
 import {
     local,
@@ -17,7 +15,8 @@ import {
     getInstance,
     throwUnavailableError,
     readyState,
-    proxyRoot
+    proxyRoot,
+    evalRouteId
 } from './util';
 import { ModuleProxy as ModuleProxyRoot } from ".";
 
@@ -162,15 +161,15 @@ export abstract class ModuleProxy extends Injectable {
         if (singletons.length > 0) {
             // If the module is connected to one or more remote instances,
             // redirect traffic to one of them automatically.
-            let num = hash(serialize(route));
+            let id = evalRouteId(route);
             let availableSingletons = singletons.filter(item => {
                 return item[readyState] === 2;
             });
 
             if (availableSingletons.length > 0) {
-                return availableSingletons[num % availableSingletons.length];
+                return availableSingletons[id % availableSingletons.length];
             } else {
-                return singletons[num % singletons.length];
+                return singletons[id % singletons.length];
             }
         } else {
             throwUnavailableError(this.name);

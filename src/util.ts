@@ -6,6 +6,7 @@ import { BSP } from "bsp";
 import { serialize, deserialize } from "@hyurl/structured-clone";
 import isOwnKey from "@hyurl/utils/isOwnKey";
 import { ModuleLoader } from './header';
+import hash = require("string-hash");
 
 const WinPipe = "\\\\?\\pipe\\";
 export const local = Symbol("local");
@@ -252,4 +253,55 @@ export function patchProperties(
 
 export function dict(): { [x: string]: any } {
     return Object.create(null);
+}
+
+export function evalRouteId(value: any): number {
+    let type = typeof value;
+
+    switch (type) {
+        case "number":
+        case "boolean":
+            return Number(value);
+
+        case "string":
+        case "symbol":
+        case "bigint":
+            return hash(String(value));
+
+        case "function":
+            return hash(String(value.name || value));
+
+        case "object":
+        case "undefined":
+            if (value === null || value === undefined) {
+                return 0;
+            } else {
+                return hash(formatObjectStructure(value));
+            }
+    }
+}
+
+function formatObjectStructure(obj: object, memory: any[] = void 0) {
+    memory || (memory = [obj]);
+
+    let token = "{";
+
+    Object.keys(obj).sort().forEach((key, i) => {
+        if (i !== 0) {
+            token += "," + key;
+        } else {
+            token += key;
+        }
+
+        try {
+            if (obj[key] !== null && typeof obj[key] === "object") {
+                if (!memory.includes(obj[key])) {
+                    memory.push(obj[key]);
+                    token += ":" + formatObjectStructure(obj[key], memory);
+                }
+            }
+        } catch (e) { }
+    });
+
+    return token + "}";
 }
