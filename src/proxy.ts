@@ -6,7 +6,7 @@ import { readdirSync } from 'fs';
 import cloneDeep = require("lodash/cloneDeep");
 import merge = require("lodash/merge");
 import values = require("lodash/values");
-import isClass from "could-be-class";
+import typeOf from "@hyurl/utils/typeOf";
 import {
     local,
     set,
@@ -102,16 +102,12 @@ export abstract class ModuleProxy extends Injectable {
         if (typeof exports === "object") {
             if (typeof exports.default === "object") {
                 return exports.default;
-            } else if (
-                typeof exports.default === "function" &&
-                isClass(exports.default, true)
-            ) {
+            } else if (typeOf(exports.default) === "class") {
                 return exports.default.prototype;
             }
 
             return exports;
-        } else if (typeof exports === "function" && isClass(exports, true)
-        ) {
+        } else if (typeOf(exports) === "class") {
             return exports.prototype;
         } else {
             return null;
@@ -121,12 +117,9 @@ export abstract class ModuleProxy extends Injectable {
     get ctor(): new (...args: any[]) => any {
         let { exports } = this;
 
-        if (
-            typeof exports === "object" &&
-            isClass(exports.default, true)
-        ) {
+        if (typeof exports === "object" && typeOf(exports.default) === "class") {
             return exports.default;
-        } else if (typeof exports === "function" && isClass(exports, true)) {
+        } else if (typeOf(exports) === "class") {
             return exports;
         } else {
             return null;
