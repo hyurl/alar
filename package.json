@@ -1,6 +1,6 @@
 {
   "name": "alar",
-  "version": "6.10.0",
+  "version": "6.10.1",
   "description": "Auto-Load And Remote.",
   "main": "dist/index.js",
   "types": "src/index.ts",
@@ -34,8 +34,8 @@
   },
   "homepage": "https://github.com/hyurl/alar#readme",
   "dependencies": {
-    "@hyurl/structured-clone": "^0.2.2",
-    "@hyurl/utils": "^0.1.45",
+    "@hyurl/structured-clone": "^0.2.3",
+    "@hyurl/utils": "^0.1.50",
     "@types/backoff": "^2.5.1",
     "@types/fs-extra": "^8.1.1",
     "advanced-collections": "^0.1.2",
@@ -53,14 +53,14 @@
     "tslib": "^1.13.0"
   },
   "devDependencies": {
-    "@types/lodash": "^4.14.151",
+    "@types/lodash": "^4.14.152",
     "@types/mocha": "^5.2.7",
-    "@types/node": "^12.12.39",
+    "@types/node": "^12.12.42",
     "bson": "^4.0.4",
     "fron": "^0.2.4",
     "mocha": "^5.2.0",
     "sleep-promise": "^8.0.1",
     "source-map-support": "^0.5.19",
-    "typescript": "^3.9.2"
+    "typescript": "^3.9.3"
   }
 }

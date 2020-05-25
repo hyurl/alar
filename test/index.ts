@@ -12,6 +12,7 @@ import * as net from "net";
 import MyError from "./error";
 import data from "./data";
 import * as bsp from "bsp";
+import define from "@hyurl/utils/define";
 
 var App: alar.ModuleProxy;
 
@@ -29,7 +30,8 @@ function fork(filename: string): Promise<childProcess.ChildProcess> {
 
 describe("Alar ModuleProxy", () => {
     it("should create a root module proxy instance as expected", () => {
-        App = global["app"] = new alar.ModuleProxy("app", __dirname + "/app");
+        App = new alar.ModuleProxy("app", __dirname + "/app");
+        define(global, "app", App);
         assert.strictEqual(App.name, "app");
         assert.strictEqual(App.path, path.normalize(__dirname + "/app"));
     });
