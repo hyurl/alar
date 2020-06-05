@@ -3,7 +3,6 @@ import * as alar from "../src";
 import * as assert from "assert";
 import * as path from "path";
 import * as fs from "fs-extra";
-import * as sleep from "sleep-promise";
 import Bootstrap from "./app/bootstrap";
 import User from "./app/service/user";
 import config from "./app/config";
@@ -13,6 +12,7 @@ import MyError from "./error";
 import data from "./data";
 import * as bsp from "bsp";
 import define from "@hyurl/utils/define";
+import sleep from "@hyurl/utils/sleep";
 
 var App: alar.ModuleProxy;
 

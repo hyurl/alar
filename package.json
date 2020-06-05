@@ -1,6 +1,6 @@
 {
   "name": "alar",
-  "version": "6.11.0",
+  "version": "6.12.0",
   "description": "Auto-Load And Remote.",
   "main": "dist/index.js",
   "types": "src/index.ts",
@@ -40,7 +40,7 @@
     "@types/fs-extra": "^8.1.1",
     "advanced-collections": "^0.1.2",
     "backoff": "^2.5.0",
-    "bsp": "^1.2.0",
+    "bsp": "^1.3.0",
     "check-iterable": "^1.0.2",
     "chokidar": "^3.4.0",
     "fs-extra": "^8.1.0",
@@ -53,14 +53,13 @@
     "tslib": "^1.13.0"
   },
   "devDependencies": {
-    "@types/lodash": "^4.14.152",
+    "@types/lodash": "^4.14.155",
     "@types/mocha": "^5.2.7",
-    "@types/node": "^12.12.42",
+    "@types/node": "^14.0.11",
     "bson": "^4.0.4",
     "fron": "^0.2.4",
     "mocha": "^5.2.0",
-    "sleep-promise": "^8.0.1",
     "source-map-support": "^0.5.19",
-    "typescript": "^3.9.3"
+    "typescript": "^3.9.5"
   }
 }
