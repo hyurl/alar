@@ -21,7 +21,7 @@
     "module",
     "proxy",
     "auto-load",
-    "hot-realod",
+    "hot-reload",
     "micro-service",
     "ipc",
     "rpc",
