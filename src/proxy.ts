@@ -143,30 +143,37 @@ export abstract class ModuleProxy extends Injectable {
             );
         }
 
-        // If the route matches the any key of the remoteSingletons, return the
+        // If the route matches any key of the remoteSingletons, return the
         // corresponding singleton as wanted.
         if (typeof route === "string" && this.remoteSingletons[route]) {
             return this.remoteSingletons[route];
         }
 
         let singletons = values(this.remoteSingletons);
+        let count = singletons.length;
 
-        if (singletons.length > 0) {
-            // If the module is connected to one or more remote instances,
-            // redirect traffic to one of them automatically.
-            let id = evalRouteId(route);
+        if (count > 0) {
             let availableSingletons = singletons.filter(item => {
                 return item[readyState] === 2;
             });
+            let _count = availableSingletons.length;
 
-            if (availableSingletons.length > 0) {
-                return availableSingletons[id % availableSingletons.length];
+            if (_count === 1) {
+                return availableSingletons[0];
+            } else if (_count >= 2) {
+                // If the module is connected to more than one remote instances,
+                // redirect traffic to one of them automatically.
+                let id = evalRouteId(route);
+                return availableSingletons[id % _count];
+            } else if (count === 1) {
+                return singletons[0];
             } else {
-                return singletons[id % singletons.length];
+                let id = evalRouteId(route);
+                return singletons[id % count];
             }
-        } else {
-            throwUnavailableError(this.name);
         }
+
+        throwUnavailableError(this.name);
     }
 
     fallbackToLocal(): boolean;
