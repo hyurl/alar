@@ -1,14 +1,14 @@
 {
   "name": "alar",
-  "version": "6.12.3",
+  "version": "6.12.4",
   "description": "Auto-Load And Remote.",
   "main": "dist/index.js",
   "types": "src/index.ts",
   "scripts": {
     "prepublishOnly": "tsc",
-    "pretest": "mkdir -p ./test/.bin/test/ && cp -R ./test/json ./test/.bin/test && tsc -p test",
-    "test": "mocha --exit test/.bin/test",
-    "posttest": "rm -rf ./test/.bin"
+    "pretest": "mkdir -p ./test/.build/test/ && cp -R ./test/json ./test/.build/test && tsc -p test",
+    "test": "mocha --exit test/.build/test",
+    "posttest": "rm -rf ./test/.build"
   },
   "engines": {
     "node": ">=8.3"
@@ -34,8 +34,8 @@
   },
   "homepage": "https://github.com/hyurl/alar#readme",
   "dependencies": {
-    "@hyurl/structured-clone": "^0.2.5",
-    "@hyurl/utils": "^0.2.5",
+    "@hyurl/structured-clone": "^0.2.6",
+    "@hyurl/utils": "^0.2.8",
     "@types/backoff": "^2.5.1",
     "@types/fs-extra": "^8.1.1",
     "advanced-collections": "^0.1.2",
@@ -55,11 +55,10 @@
   "devDependencies": {
     "@types/lodash": "^4.14.161",
     "@types/mocha": "^5.2.7",
-    "@types/node": "^14.6.4",
+    "@types/node": "^14.11.1",
     "bson": "^4.1.0",
     "fron": "^0.2.4",
     "mocha": "^5.2.0",
-    "source-map-support": "^0.5.19",
-    "typescript": "^3.9.7"
+    "source-map-support": "^0.5.19"
   }
 }

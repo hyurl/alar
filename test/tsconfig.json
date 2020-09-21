@@ -7,7 +7,7 @@
             ".",
             "../src"
         ],
-        "outDir": "./.bin",
+        "outDir": "./.build",
         "experimentalDecorators": true,
         "newLine": "LF",
         "noUnusedParameters": true,
