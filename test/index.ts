@@ -518,10 +518,11 @@ describe("Alar ModuleProxy", () => {
     });
 
     it("should transmit a custom error as expected", async () => {
-        let server = await App.serve(config);
-        let client = await App.connect(config);
+        let _config = Object.assign({ secret: "abcdefg" }, config);
+        let filename = __dirname + "/server/index.js";
+        let proc = await fork(filename);
+        let client = await App.connect(_config);
 
-        server.register(app.service.user);
         client.register(app.service.user);
         alar.RpcChannel.registerError(MyError);
 
@@ -537,9 +538,11 @@ describe("Alar ModuleProxy", () => {
         assert.strictEqual(err.name, "MyError");
         assert.strictEqual(err.message, "something went wrong");
         assert.strictEqual(err.toString(), "MyError: something went wrong");
+        assert(err.stack.includes("/alar/test/index.ts"));
 
         await client.close();
-        await server.close();
+        proc.kill();
+        await sleep(100);
     });
 
     it("should transmit a non-standard error as expected", async () => {

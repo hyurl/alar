@@ -22,7 +22,7 @@ type Subscriber = (data: any) => void | Promise<void>;
 type ChannelState = "initiated" | "connecting" | "connected" | "closed";
 type Task = {
     resolve: (data: any) => void,
-    reject: (err: Error) => void
+    reject: (err: Error) => void;
 };
 
 export interface ClientOptions extends RpcOptions {
@@ -39,7 +39,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
     serverId: string;
     protected state: ChannelState = "initiated";
     protected socket: net.Socket = null;
-    protected registry: { [name: string]: ModuleProxy<any> } = dict();
+    protected registry: { [name: string]: ModuleProxy<any>; } = dict();
     protected taskId = sequid(0, true);
     protected tasks = new Map<number, Task>();
     protected topics = new Map<string, Set<Subscriber>>();
@@ -420,14 +420,14 @@ export class RpcClient extends RpcChannel implements ClientOptions {
 
 class ThenableIteratorProxy implements ThenableAsyncGeneratorLike {
     readonly taskId: number = this.client["taskId"].next().value;
-    protected status: "uninitiated" | "suspended" | "closed";
+    protected status: "initiating" | "pending" | "closed";
     protected result: any;
     protected args: any[];
     protected queue: Array<{
         event: RpcEvents,
         data?: any,
         resolve: Function,
-        reject: Function
+        reject: Function;
     }> = [];
 
     constructor(
@@ -436,7 +436,7 @@ class ThenableIteratorProxy implements ThenableAsyncGeneratorLike {
         protected method: string,
         ...args: any[]
     ) {
-        this.status = "uninitiated";
+        this.status = "initiating";
         // this.result = void 0;
         this.args = args;
 
@@ -519,17 +519,21 @@ class ThenableIteratorProxy implements ThenableAsyncGeneratorLike {
         let task = this.client["tasks"].get(this.taskId);
 
         if (!task) {
+            let call: { readonly stack?: string; } = {};
+            Error.captureStackTrace(call);
+
             this.client["tasks"].set(this.taskId, task = {
                 resolve: (data: any) => {
-                    if (this.status === "suspended") {
+                    if (this.status === "pending") {
                         if (this.queue.length > 0) {
                             this.queue.shift().resolve(data);
                         }
                     }
                 },
                 reject: (err: any) => {
-                    if (this.status === "suspended") {
+                    if (this.status === "pending") {
                         if (this.queue.length > 0) {
+                            err.stack += "\n--ASYNC--" + call.stack.slice(6);
                             this.queue.shift().reject(err);
                         }
 
@@ -576,7 +580,7 @@ class ThenableIteratorProxy implements ThenableAsyncGeneratorLike {
                     return Promise.reject(args[0]);
             }
         } else {
-            if (this.status === "uninitiated" && event !== RpcEvents.INVOKE) {
+            if (this.status === "initiating" && event !== RpcEvents.INVOKE) {
                 // If in a generator call and the generator hasn't been 
                 // initiated, send the request with arguments for initiation on
                 // the server.
@@ -598,7 +602,7 @@ class ThenableIteratorProxy implements ThenableAsyncGeneratorLike {
                 );
             }
 
-            this.status = "suspended";
+            this.status = "pending";
 
             try {
                 let res = await this.prepareTask(event, args[0]);

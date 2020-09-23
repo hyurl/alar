@@ -1,6 +1,6 @@
 {
   "name": "alar",
-  "version": "6.12.4",
+  "version": "6.13.0",
   "description": "Auto-Load And Remote.",
   "main": "dist/index.js",
   "types": "src/index.ts",
@@ -55,7 +55,7 @@
   "devDependencies": {
     "@types/lodash": "^4.14.161",
     "@types/mocha": "^5.2.7",
-    "@types/node": "^14.11.1",
+    "@types/node": "^14.11.2",
     "bson": "^4.1.0",
     "fron": "^0.2.4",
     "mocha": "^5.2.0",
