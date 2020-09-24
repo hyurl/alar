@@ -148,7 +148,7 @@ describe("Alar ModuleProxy", () => {
         assert.deepStrictEqual(json.test1(), expected);
         assert.deepStrictEqual(json.test2(), expected);
         assert.strictEqual(Json.resolve(__dirname + "/json/test1.js"), "json.test1");
-        assert.strictEqual(Json.resolve(__dirname + "/json/test2.json"), "json.test2")
+        assert.strictEqual(Json.resolve(__dirname + "/json/test2.json"), "json.test2");
     });
 
     it("should serve an IPC service as expected", async () => {
@@ -334,7 +334,7 @@ describe("Alar ModuleProxy", () => {
         client.subscribe("set-data", listener)
             .subscribe("set-data", listener2)
             .subscribe("set-data-2", listener)
-            .subscribe("set-data-2", listener2)
+            .subscribe("set-data-2", listener2);
 
         client.unsubscribe("set-data", listener);
         client.unsubscribe("set-data-2");
@@ -517,6 +517,33 @@ describe("Alar ModuleProxy", () => {
         assert.strictEqual(result, data);
     });
 
+    it("should trigger timeout error as expected", async () => {
+        let _config = Object.assign({ secret: "abcdefg" }, config, { timeout: 1000 });
+        let filename = __dirname + "/server/index.js";
+        let proc = await fork(filename);
+        let client = await App.connect(_config);
+
+        client.register(app.service.user);
+
+        let err: MyError;
+
+        try {
+            await app.service.user("").triggerTimeout();
+        } catch (e) {
+            err = e;
+        }
+
+        assert(err instanceof Error);
+        assert.strictEqual(
+            err.message,
+            "app.service.user(<route>).triggerTimeout() timeout after 1 second");
+        assert(err.stack.includes("/alar/test/index.ts"));
+
+        await client.close();
+        proc.kill();
+        await sleep(100);
+    });
+
     it("should transmit a custom error as expected", async () => {
         let _config = Object.assign({ secret: "abcdefg" }, config);
         let filename = __dirname + "/server/index.js";
@@ -684,7 +711,7 @@ describe("Alar ModuleProxy", () => {
     /////////////////////// Life Cycle Support /////////////////////////////////
 
     it("should watch file change and reload module as expected", async function () {
-        this.timeout(15000)
+        this.timeout(15000);
         let contents = await fs.readFile(app.service.user.path + ".js", "utf8");
         let newContents = contents.replace("return this.name", "return this.name + ' Budy'");
         let watcher = App.watch();

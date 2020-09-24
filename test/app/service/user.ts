@@ -1,5 +1,6 @@
 import MyError from "../../error";
 import data from "../../data";
+import sleep from "@hyurl/utils/sleep";
 
 declare global {
     namespace app {
@@ -52,6 +53,10 @@ export default class User {
 
     async nonStandardError(): Promise<never> {
         throw "something went wrong";
+    }
+
+    async triggerTimeout() {
+        await sleep(1500);
     }
 
     async setTime(time: number) {

@@ -501,14 +501,57 @@ class ThenableIteratorProxy implements ThenableAsyncGeneratorLike {
         this.queue = [];
     }
 
-    protected createTimeout() {
+    protected captureStackTrack() {
+        let call = {};
+        Error.captureStackTrace(call);
+        return call as { readonly stack: string; };
+    }
+
+    protected resolveStackTrace(err: Error, call: { readonly stack: string; }) {
+        let stacks = call.stack.split("\n");
+        let offset = stacks.findIndex(
+            line => line.startsWith("    at new ThenableIteratorProxy")
+        );
+
+        if (offset !== -1) {
+            offset += 2;
+            stacks = stacks.slice(offset);
+            err.stack += "\n" + stacks.join("\n");
+        }
+    }
+
+    protected creatTask(call: { readonly stack: string; }) {
+        return {
+            resolve: (data: any) => {
+                if (this.status === "pending") {
+                    if (this.queue.length > 0) {
+                        this.queue.shift().resolve(data);
+                    }
+                }
+            },
+            reject: (err: any) => {
+                if (this.status === "pending") {
+                    if (this.queue.length > 0) {
+                        this.resolveStackTrace(err, call);
+                        this.queue.shift().reject(err);
+                    }
+
+                    this.close();
+                }
+            }
+        };
+    }
+
+    protected createTimeout(call: { readonly stack: string; }) {
         return setTimeout(() => {
             if (this.queue.length > 0) {
                 let task = this.queue.shift();
                 let callee = `${this.modName}(<route>).${this.method}()`;
                 let duration = humanizeDuration(this.client.timeout);
+                let err = new Error(`${callee} timeout after ${duration}`);
 
-                task.reject(new Error(`${callee} timeout after ${duration}`));
+                this.resolveStackTrace(err, call);
+                task.reject(err);
             }
 
             this.close();
@@ -516,38 +559,17 @@ class ThenableIteratorProxy implements ThenableAsyncGeneratorLike {
     }
 
     protected prepareTask(event: RpcEvents, data?: any): Promise<any> {
-        let task = this.client["tasks"].get(this.taskId);
+        let call = this.captureStackTrack();
 
-        if (!task) {
-            let call: { readonly stack?: string; } = {};
-            Error.captureStackTrace(call);
-
-            this.client["tasks"].set(this.taskId, task = {
-                resolve: (data: any) => {
-                    if (this.status === "pending") {
-                        if (this.queue.length > 0) {
-                            this.queue.shift().resolve(data);
-                        }
-                    }
-                },
-                reject: (err: any) => {
-                    if (this.status === "pending") {
-                        if (this.queue.length > 0) {
-                            err.stack += "\n--ASYNC--" + call.stack.slice(6);
-                            this.queue.shift().reject(err);
-                        }
-
-                        this.close();
-                    }
-                }
-            });
+        if (!this.client["tasks"].has(this.taskId)) {
+            this.client["tasks"].set(this.taskId, this.creatTask(call));
         }
 
         // Pack every request as Promise, and assign the resolver and rejecter 
         // to the task, so that when the result or any error is received, 
         // they can be called properly.
         return new Promise((resolve, reject) => {
-            let timer = this.createTimeout();
+            let timer = this.createTimeout(call);
 
             this.queue.push({
                 event,
