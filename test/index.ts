@@ -252,7 +252,7 @@ describe("Alar ModuleProxy", () => {
 
         // kill the server and restart it, the client will reconnect in the
         // background automatically.
-        await kill(serverProcess);
+        serverProcess.kill();
         serverProcess = await fork(filename, { USE_SECRET: "abcdefg" });
 
         while (!client.connected) {
