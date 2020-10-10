@@ -1,20 +1,33 @@
 import * as alar from "../../src";
 import config from "../app/config";
 import define from "@hyurl/utils/define";
-import MyError from "../error";
+import "../error";
 
 export const App = new alar.ModuleProxy("app", __dirname + "/../app");
 
 define(global, "app", App);
-alar.RpcChannel.registerError(MyError);
 
 (async () => {
-    let _config = Object.assign({ secret: "abcdefg" }, config);
-    var server = await App.serve(_config);
+    var server: alar.RpcServer;
+
+    if (process.env["USE_IPC"]) {
+        server = await App.serve(<string>process.env["USE_IPC"]);
+    } else if (process.env["USE_SECRET"]) {
+        server = await App.serve({ ...config, secret: process.env["USE_SECRET"] });
+    } else if (process.env["USE_CODEC"]) {
+        server = await App.serve({ ...config, codec: <any>process.env["USE_CODEC"] });
+    } else {
+        server = await App.serve(config);
+    }
 
     server.register(app.service.user);
 
-    app.service.user.instance().setName("Mr. Handsome");
-
     process.send("ready");
+
+    process.on("message", async (msg) => {
+        if (msg === "exit") {
+            await server.close();
+            process.send("exited");
+        }
+    });
 })();

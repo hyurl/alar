@@ -1,6 +1,6 @@
 import MyError from "../../error";
-import data from "../../data";
 import sleep from "@hyurl/utils/sleep";
+import * as fs from "fs-extra";
 
 declare global {
     namespace app {
@@ -60,7 +60,7 @@ export default class User {
     }
 
     async setTime(time: number) {
-        data.time = time;
+        await fs.writeFile(__dirname + "/.tmp", String(time), "utf8");
     }
 
     async setAndGet(data: any) {

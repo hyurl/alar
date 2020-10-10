@@ -9,20 +9,31 @@ import config from "./app/config";
 import * as childProcess from "child_process";
 import * as net from "net";
 import MyError from "./error";
-import data from "./data";
 import * as bsp from "bsp";
 import define from "@hyurl/utils/define";
 import sleep from "@hyurl/utils/sleep";
 
 var App: alar.ModuleProxy;
 
-function fork(filename: string): Promise<childProcess.ChildProcess> {
+function fork(filename: string, env: Record<string, string> = {}): Promise<childProcess.ChildProcess> {
     return new Promise((resolve, reject) => {
-        let proc = childProcess.fork(filename);
+        let prox = childProcess.fork(filename, { env });
 
-        proc.on("error", reject).on("message", msg => {
+        prox.once("error", reject).once("message", msg => {
             if (msg === "ready") {
-                resolve(proc);
+                resolve(prox);
+            }
+        });
+    });
+}
+
+function kill(prox: childProcess.ChildProcess): Promise<void> {
+    return new Promise((resolve, reject) => {
+        prox.send("exit");
+        prox.once("exit", reject).once("message", msg => {
+            if (msg === "exited") {
+                prox.kill();
+                resolve();
             }
         });
     });
@@ -153,49 +164,44 @@ describe("Alar ModuleProxy", () => {
 
     it("should serve an IPC service as expected", async () => {
         let sockPath = process.cwd() + "/alar.sock";
-        let server = await App.serve(sockPath);
-
-        server.register(app.service.user);
+        let serverProcess = await fork(__dirname + "/server/index.js", { USE_IPC: sockPath });
 
         let client = await App.connect(sockPath);
 
         client.register(app.service.user);
+        await app.service.user("").setName("Mr. Handsome");
 
-        assert.strictEqual(await app.service.user("").getName(), "Mr. World");
+        assert.strictEqual(await app.service.user("").getName(), "Mr. Handsome");
 
         await client.close();
-        await server.close();
+        await kill(serverProcess);
     });
 
     it("should serve an RPC service as expected", async () => {
-        let server = await App.serve(config);
-
-        server.register(app.service.user);
+        let serverProcess = await fork(__dirname + "/server/index.js");
 
         let client = await App.connect(config);
 
         client.register(app.service.user);
+        await app.service.user("").setName("Mr. Handsome");
 
-        assert.strictEqual(await app.service.user("").getName(), "Mr. World");
+        assert.strictEqual(await app.service.user("").getName(), "Mr. Handsome");
 
         await client.close();
-        await server.close();
+        await kill(serverProcess);
     });
 
     it("should serve an RPC service with secret as expected", async () => {
-        let _config = Object.assign({ secret: "abcdefg" }, config);
-        let server = await App.serve(_config);
-
-        server.register(app.service.user);
-
-        let client = await App.connect(_config);
+        let serverProcess = await fork(__dirname + "/server/index.js", { USE_SECRET: "abcdefg" });
+        let client = await App.connect({ ...config, secret: "abcdefg" });
 
         client.register(app.service.user);
+        await app.service.user("").setName("Mr. Handsome");
 
-        assert.strictEqual(await app.service.user("").getName(), "Mr. World");
+        assert.strictEqual(await app.service.user("").getName(), "Mr. Handsome");
 
         await client.close();
-        await server.close();
+        await kill(serverProcess);
     });
 
     it("should get clients connected to the service in IDs as expected", async () => {
@@ -238,27 +244,25 @@ describe("Alar ModuleProxy", () => {
     });
 
     it("should reconnect the RPC service in the background automatically", async () => {
-        let _config = Object.assign({ secret: "abcdefg" }, config);
         let filename = __dirname + "/server/index.js";
-        let proc = await fork(filename);
-        let client = await App.connect(_config);
+        let serverProcess = await fork(filename, { USE_SECRET: "abcdefg" });
+        let client = await App.connect({ ...config, secret: "abcdefg" });
 
         client.register(app.service.user);
 
         // kill the server and restart it, the client will reconnect in the
         // background automatically.
-        proc.kill();
-        proc = await fork(filename);
+        await kill(serverProcess);
+        serverProcess = await fork(filename, { USE_SECRET: "abcdefg" });
 
         while (!client.connected) {
             await sleep(100);
         }
 
-        assert.strictEqual(await app.service.user("").getName(), "Mr. Handsome");
+        assert.strictEqual(await app.service.user("").getName(), "Mr. World");
 
         await client.close();
-        proc.kill();
-        await sleep(100);
+        await kill(serverProcess);
     });
 
     it("should reject error is no remote service is available", async () => {
@@ -373,11 +377,10 @@ describe("Alar ModuleProxy", () => {
     });
 
     it("should get result from a remote generator as expected", async () => {
-        let server = await App.serve(config);
+        let serverProcess = await fork(__dirname + "/server/index.js");
         let client = await App.connect(config);
         let result: (string | string[])[] = [];
 
-        server.register(app.service.user);
         client.register(app.service.user);
 
         let generator = app.service.user("").getFriends("Open Source", "Good Fella");
@@ -394,14 +397,13 @@ describe("Alar ModuleProxy", () => {
         assert.deepStrictEqual(result, ["Mozilla", "GitHub", "Linux", ["Open Source", "Good Fella"]]);
 
         await client.close();
-        await server.close();
+        await kill(serverProcess);
     });
 
     it("should invoke next method in the remote generator as expected", async () => {
-        let server = await App.serve(config);
+        let serverProcess = await fork(__dirname + "/server/index.js");
         let client = await App.connect(config);
 
-        server.register(app.service.user);
         client.register(app.service.user);
 
         let generator = app.service.user("").repeatAfterMe();
@@ -412,14 +414,13 @@ describe("Alar ModuleProxy", () => {
         assert.deepStrictEqual(result1, { value: "Google", done: false });
 
         await client.close();
-        await server.close();
+        await kill(serverProcess);
     });
 
     it("should invoke return method in the remote generator as expected", async () => {
-        let server = await App.serve(config);
+        let serverProcess = await fork(__dirname + "/server/index.js");
         let client = await App.connect(config);
 
-        server.register(app.service.user);
         client.register(app.service.user);
 
         let generator = app.service.user("").repeatAfterMe();
@@ -428,14 +429,13 @@ describe("Alar ModuleProxy", () => {
         assert.deepStrictEqual(result, { value: "Google", done: true });
 
         await client.close();
-        await server.close();
+        await kill(serverProcess);
     });
 
     it("should invoke throw method in the remote generator as expected", async () => {
-        let server = await App.serve(config);
+        let serverProcess = await fork(__dirname + "/server/index.js");
         let client = await App.connect(config);
 
-        server.register(app.service.user);
         client.register(app.service.user);
 
         let generator = app.service.user("").repeatAfterMe();
@@ -454,7 +454,7 @@ describe("Alar ModuleProxy", () => {
         assert.deepStrictEqual(await generator.next(), { value: undefined, done: true });
 
         await client.close();
-        await server.close();
+        await kill(serverProcess);
     });
 
     it("should get result from a local generator as expected", async () => {
@@ -518,9 +518,8 @@ describe("Alar ModuleProxy", () => {
     });
 
     it("should trigger timeout error as expected", async () => {
-        let _config = Object.assign({ secret: "abcdefg" }, config, { timeout: 1000 });
-        let filename = __dirname + "/server/index.js";
-        let proc = await fork(filename);
+        let serverProcess = await fork(__dirname + "/server/index.js");
+        let _config = Object.assign({}, config, { timeout: 1000 });
         let client = await App.connect(_config);
 
         client.register(app.service.user);
@@ -540,18 +539,14 @@ describe("Alar ModuleProxy", () => {
         assert(err.stack.includes("/alar/test/index.ts"));
 
         await client.close();
-        proc.kill();
-        await sleep(100);
+        await kill(serverProcess);
     });
 
     it("should transmit a custom error as expected", async () => {
-        let _config = Object.assign({ secret: "abcdefg" }, config);
-        let filename = __dirname + "/server/index.js";
-        let proc = await fork(filename);
-        let client = await App.connect(_config);
+        let serverProcess = await fork(__dirname + "/server/index.js");
+        let client = await App.connect(config);
 
         client.register(app.service.user);
-        alar.RpcChannel.registerError(MyError);
 
         let err: MyError;
 
@@ -568,17 +563,14 @@ describe("Alar ModuleProxy", () => {
         assert(err.stack.includes("/alar/test/index.ts"));
 
         await client.close();
-        proc.kill();
-        await sleep(100);
+        await kill(serverProcess);
     });
 
     it("should transmit a non-standard error as expected", async () => {
-        let server = await App.serve(config);
+        let serverProcess = await fork(__dirname + "/server/index.js");
         let client = await App.connect(config);
 
-        server.register(app.service.user);
         client.register(app.service.user);
-        alar.RpcChannel.registerError(MyError);
 
         let err: string;
 
@@ -591,36 +583,32 @@ describe("Alar ModuleProxy", () => {
         assert.strictEqual(err, "something went wrong");
 
         await client.close();
-        await server.close();
+        await kill(serverProcess);
     });
 
     it("should invoke the remote method in the background as expected", async () => {
-        let server = await App.serve(config);
+        let serverProcess = await fork(__dirname + "/server/index.js");
         let client = await App.connect(config);
 
-        server.register(app.service.user);
         client.register(app.service.user);
 
         let time = Date.now();
 
         // DO NOT await
         app.service.user("").setTime(time);
+        await sleep(500);
 
-        while (!data.time) {
-            await sleep(10);
-        }
-
-        assert.strictEqual(data.time, time);
+        let _time = await fs.readFile(__dirname + "/app/service/.tmp", "utf8");
+        assert.strictEqual(Number(_time), time);
 
         await client.close();
-        await server.close();
+        await kill(serverProcess);
     });
 
     it("should invoke the remote method await it after a while as expected", async () => {
-        let server = await App.serve(config);
+        let serverProcess = await fork(__dirname + "/server/index.js");
         let client = await App.connect(config);
 
-        server.register(app.service.user);
         client.register(app.service.user);
 
         let promise = app.service.user("").setAndGet("Hello, World!");
@@ -630,7 +618,7 @@ describe("Alar ModuleProxy", () => {
         assert.strictEqual(await promise, "Hello, World!");
 
         await client.close();
-        await server.close();
+        await kill(serverProcess);
     });
 
     it("should access to the corresponding singleton when passing DSN", async () => {
@@ -731,11 +719,20 @@ describe("Alar ModuleProxy", () => {
         watcher.close();
     });
 
+    it("should serve an RPC service using JSON codec as expected", async () => {
+        let serverProcess = await fork(__dirname + "/server/index.js", { USE_CODEC: "JSON" });
+        let client = await App.connect({ ...config, codec: "JSON" });
+
+        client.register(app.service.user);
+
+        assert.strictEqual(await app.service.user("").getName(), "Mr. World Budy");
+
+        await client.close();
+        await kill(serverProcess);
+    });
+
     it("should serve an RPC service using BSON codec as expected", async () => {
-        let server = await App.serve({ ...config, codec: "BSON" });
-
-        server.register(app.service.user);
-
+        let serverProcess = await fork(__dirname + "/server/index.js", { USE_CODEC: "BSON" });
         let client = await App.connect({ ...config, codec: "BSON" });
 
         client.register(app.service.user);
@@ -743,14 +740,11 @@ describe("Alar ModuleProxy", () => {
         assert.strictEqual(await app.service.user("").getName(), "Mr. World Budy");
 
         await client.close();
-        await server.close();
+        await kill(serverProcess);
     });
 
     it("should serve an RPC service using FRON codec as expected", async () => {
-        let server = await App.serve({ ...config, codec: "FRON" });
-
-        server.register(app.service.user);
-
+        let serverProcess = await fork(__dirname + "/server/index.js", { USE_CODEC: "FRON" });
         let client = await App.connect({ ...config, codec: "FRON" });
 
         client.register(app.service.user);
@@ -758,7 +752,7 @@ describe("Alar ModuleProxy", () => {
         assert.strictEqual(await app.service.user("").getName(), "Mr. World Budy");
 
         await client.close();
-        await server.close();
+        await kill(serverProcess);
     });
 
     it("should pass instanceof check onto the module proxy", () => {

@@ -507,7 +507,13 @@ class ThenableIteratorProxy implements ThenableAsyncGeneratorLike {
         return call as { readonly stack: string; };
     }
 
-    protected resolveStackTrace(err: Error, call: { readonly stack: string; }) {
+    protected resolveStackTrace(
+        err: Error | string,
+        call: { readonly stack: string; }
+    ) {
+        if (!(err instanceof Error))
+            return;
+
         let stacks = call.stack.split("\n");
         let offset = stacks.findIndex(
             line => line.startsWith("    at new ThenableIteratorProxy")
@@ -602,27 +608,13 @@ class ThenableIteratorProxy implements ThenableAsyncGeneratorLike {
                     return Promise.reject(args[0]);
             }
         } else {
-            if (this.status === "initiating" && event !== RpcEvents.INVOKE) {
-                // If in a generator call and the generator hasn't been 
-                // initiated, send the request with arguments for initiation on
-                // the server.
-                this.client["send"](
-                    event,
-                    this.taskId,
-                    this.modName,
-                    this.method,
-                    [...this.args],
-                    ...args
-                );
-            } else {
-                this.client["send"](
-                    event,
-                    this.taskId,
-                    this.modName,
-                    this.method,
-                    ...args
-                );
-            }
+            this.client["send"](
+                event,
+                this.taskId,
+                this.modName,
+                this.method,
+                ...args
+            );
 
             this.status = "pending";
 
