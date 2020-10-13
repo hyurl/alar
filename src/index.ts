@@ -1,4 +1,4 @@
-import { extname, sep } from "path";
+import { extname, resolve, sep } from "path";
 import { watch, FSWatcher } from "chokidar";
 import startsWith = require("lodash/startsWith");
 import once = require("lodash/once");
@@ -62,6 +62,7 @@ export class ModuleProxy extends ModuleProxyBase {
 
     /** Resolves the given path to a module name. */
     resolve(path: string): string {
+        path = resolve(path);
         let dir = this.path + sep;
 
         if (startsWith(path, dir)) {

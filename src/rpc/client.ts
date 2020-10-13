@@ -13,7 +13,8 @@ import {
     throwUnavailableError,
     readyState,
     dict,
-    proxyRoot
+    proxyRoot,
+    absPath
 } from "../util";
 import last = require("lodash/last");
 import isOwnKey from "@hyurl/utils/isOwnKey";
@@ -124,7 +125,10 @@ export class RpcClient extends RpcChannel implements ClientOptions {
 
             if (this.path) {
                 // connect IPC (Unix domain socket or Windows named pipe)
-                this.socket = net.createConnection(this.path, connectListener);
+                this.socket = net.createConnection(
+                    absPath(this.path, true),
+                    connectListener
+                );
             } else {
                 // connect RPC
                 this.socket = net.createConnection(

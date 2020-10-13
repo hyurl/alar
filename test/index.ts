@@ -536,7 +536,12 @@ describe("Alar ModuleProxy", () => {
         assert.strictEqual(
             err.message,
             "app.service.user(<route>).triggerTimeout() timeout after 1 second");
-        assert(err.stack.includes("/alar/test/index.ts"));
+
+        if (process.platform === "win32") {
+            assert(err.stack.includes("\\alar\\test\\index.ts"));
+        } else {
+            assert(err.stack.includes("/alar/test/index.ts"));
+        }
 
         await client.close();
         await kill(serverProcess);
@@ -560,7 +565,12 @@ describe("Alar ModuleProxy", () => {
         assert.strictEqual(err.name, "MyError");
         assert.strictEqual(err.message, "something went wrong");
         assert.strictEqual(err.toString(), "MyError: something went wrong");
-        assert(err.stack.includes("/alar/test/index.ts"));
+
+        if (process.platform === "win32") {
+            assert(err.stack.includes("\\alar\\test\\index.ts"));
+        } else {
+            assert(err.stack.includes("/alar/test/index.ts"));
+        }
 
         await client.close();
         await kill(serverProcess);
