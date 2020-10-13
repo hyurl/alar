@@ -6,9 +6,9 @@
   "types": "src/index.ts",
   "scripts": {
     "prepublishOnly": "tsc",
-    "pretest": "mkdir -p ./test/.build/test/ && cp -R ./test/json ./test/.build/test && tsc -p test",
-    "test": "mocha --exit test/.build/test",
-    "posttest": "rm -rf ./test/.build"
+    "pretest": "node test/pretest.js",
+    "test": "mocha test/.build/test",
+    "posttest": "node test/posttest.js"
   },
   "engines": {
     "node": ">=8.3"
