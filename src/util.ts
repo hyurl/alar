@@ -24,6 +24,8 @@ export function absPath(filename: string, withPipe?: boolean): string {
     // resolve path to be absolute
     if (!path.isAbsolute(filename)) {
         filename = path.resolve(process.cwd(), filename);
+    } else {
+        filename = path.resolve(filename);
     }
 
     if (withPipe && os.platform() == "win32" && !startsWith(filename, WinPipe)) {
