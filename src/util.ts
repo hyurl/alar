@@ -1,6 +1,4 @@
-import * as os from "os";
 import * as path from "path";
-import startsWith = require("lodash/startsWith");
 import { ModuleProxy as ModuleProxyBase } from "./proxy";
 import { BSP } from "bsp";
 import { serialize, deserialize } from "@hyurl/structured-clone";
@@ -8,7 +6,6 @@ import isOwnKey from "@hyurl/utils/isOwnKey";
 import { ModuleLoader } from './header';
 import hash = require("string-hash");
 
-const WinPipe = "\\\\?\\pipe\\";
 export const local = Symbol("local");
 export const proxyRoot = Symbol("proxyRoot");
 
@@ -28,8 +25,10 @@ export function absPath(filename: string, withPipe?: boolean): string {
         filename = path.resolve(filename);
     }
 
-    if (withPipe && os.platform() == "win32" && !startsWith(filename, WinPipe)) {
-        filename = WinPipe + filename;
+    if (withPipe && process.platform === "win32" &&
+        !/\\\\[.?]\\pipe\\/.test(filename)
+    ) {
+        filename = "\\\\?\\pipe\\" + filename;
     }
 
     return filename;
@@ -140,7 +139,7 @@ export function humanizeDuration(duration: number): string {
 }
 
 export async function tryLifeCycleFunction(
-    mod: ModuleProxy<{ init?(): any, destroy?(): any }>,
+    mod: ModuleProxy<{ init?(): any, destroy?(): any; }>,
     fn: "init" | "destroy",
     errorHandle: (err: Error) => void = void 0
 ) {
@@ -151,7 +150,7 @@ export async function tryLifeCycleFunction(
             ins[readyState] = 1; // initiating
 
             if (errorHandle) {
-                try { await ins.init() } catch (err) { errorHandle(err) }
+                try { await ins.init(); } catch (err) { errorHandle(err); }
             } else {
                 await ins.init();
             }
@@ -163,7 +162,7 @@ export async function tryLifeCycleFunction(
             ins[readyState] = 3; // destroying
 
             if (errorHandle) {
-                try { await ins.destroy() } catch (err) { errorHandle(err) }
+                try { await ins.destroy(); } catch (err) { errorHandle(err); }
             } else {
                 await ins.destroy();
             }
@@ -203,7 +202,7 @@ export function getCodecOptions(
         }
 
         case "BSON": {
-            let BSON: { serialize: Function, deserialize: Function };
+            let BSON: { serialize: Function, deserialize: Function; };
 
             try {
                 let BSONExt = require("bson-ext");
@@ -244,7 +243,7 @@ export function patchProperties(
     target: ModuleProxyBase,
     filename: string,
     loader: ModuleLoader,
-    singletons: { [name: string]: any }
+    singletons: { [name: string]: any; }
 ) {
     set(target, "path", path.normalize(filename), false, true);
     set(target, "loader", loader);
@@ -253,7 +252,7 @@ export function patchProperties(
     set(target, "children", dict());
 }
 
-export function dict(): { [x: string]: any } {
+export function dict(): { [x: string]: any; } {
     return Object.create(null);
 }
 
