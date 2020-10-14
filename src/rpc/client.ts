@@ -16,7 +16,6 @@ import {
     proxyRoot,
     absPath
 } from "../util";
-import last = require("lodash/last");
 import isOwnKey from "@hyurl/utils/isOwnKey";
 
 type Subscriber = (data: any) => void | Promise<void>;
@@ -267,7 +266,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
     protected send(...data: Request) {
         if (this.socket && !this.socket.destroyed && this.socket.writable) {
             // If the last argument in the data is undefined, do not send it.
-            if (last(data) === undefined) {
+            if (data[data.length - 1] === undefined) {
                 data.pop();
             }
 

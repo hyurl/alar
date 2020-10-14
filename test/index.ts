@@ -538,9 +538,9 @@ describe("Alar ModuleProxy", () => {
             "app.service.user(<route>).triggerTimeout() timeout after 1 second");
 
         if (process.platform === "win32") {
-            assert(err.stack.includes("\\alar\\test\\index.ts"));
+            assert(err.stack.includes(process.cwd() + "\\test\\index.ts"));
         } else {
-            assert(err.stack.includes("/alar/test/index.ts"));
+            assert(err.stack.includes(process.cwd() + "/test/index.ts"));
         }
 
         await client.close();
@@ -567,9 +567,9 @@ describe("Alar ModuleProxy", () => {
         assert.strictEqual(err.toString(), "MyError: something went wrong");
 
         if (process.platform === "win32") {
-            assert(err.stack.includes("\\alar\\test\\index.ts"));
+            assert(err.stack.includes(process.cwd() + "\\test\\index.ts"));
         } else {
-            assert(err.stack.includes("/alar/test/index.ts"));
+            assert(err.stack.includes(process.cwd() + "/test/index.ts"));
         }
 
         await client.close();

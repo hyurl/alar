@@ -1,6 +1,5 @@
 import { extname, resolve, sep } from "path";
 import { watch, FSWatcher } from "chokidar";
-import startsWith = require("lodash/startsWith");
 import once = require("lodash/once");
 import { RpcOptions, RpcChannel } from './rpc/channel';
 import { RpcClient, ClientOptions } from "./rpc/client";
@@ -65,7 +64,7 @@ export class ModuleProxy extends ModuleProxyBase {
         path = resolve(path);
         let dir = this.path + sep;
 
-        if (startsWith(path, dir)) {
+        if (path.startsWith(dir)) {
             let modPath = path.slice(dir.length),
                 ext = extname(modPath);
 
@@ -150,7 +149,7 @@ export class ModuleProxy extends ModuleProxyBase {
 
             if (this.loader.cache) {
                 for (let filename in this.loader.cache) {
-                    if (startsWith(filename, dirname)) {
+                    if (filename.startsWith(dirname)) {
                         clearCache("unlink", filename, listener);
                     }
                 }
