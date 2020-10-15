@@ -86,7 +86,7 @@ export class RpcClient extends RpcChannel implements ClientOptions {
                 );
             }
 
-            this.state === "connecting";
+            this.state = "connecting";
             this.finishConnect = () => {
                 this.state = "connected";
                 this.resume();

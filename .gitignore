@@ -4,4 +4,4 @@ node_modules/
 *.sock
 *.tgz
 test/.bin
-web-bundle/
+client-bundle/
