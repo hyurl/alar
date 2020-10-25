@@ -4,6 +4,11 @@ Alar is a light-weight framework that provides applications the ability to
 auto-load and hot-reload modules, as well as the ability to serve instances
 remotely as RPC services.
 
+**NOTE: inspired by Alar, a new project named [Microse](https://github.com/microse-rpc)**
+**has been started, with new protocol and new syntax, and cross language support,**
+**it will become the successor of Alar so there would be no major updates for**
+**Alar any more, please check the new project out out.**
+
 *NOTE: Alar is primarily designed for [SFN](https://github.com/hyurl/sfn)*
 *framework.*
 
